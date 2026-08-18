@@ -1,0 +1,1593 @@
+{
+  "name": "WordPress Recipe Agent =>Approve Skips Regen",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 12 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -4672,
+        13648
+      ],
+      "id": "11f90068-84d3-41e3-9e73-5f9c03ef0e34",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawData = items[0].json.output[0].content[0].text;\nconst parsedData = JSON.parse(rawData.replace(/```json|```/gi, ''));\nreturn { feedback: parsedData.feedback };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        12816
+      ],
+      "id": "cb270ea4-0852-42f7-b439-d4856eeedaa8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ JSON.parse($json.output[0].content[0].text).intent }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "eb1a77b6-e676-4d0f-a986-29956b5ddce2"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Approved"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ JSON.parse($json.output[0].content[0].text).intent }}",
+                    "rightValue": "change_photo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0f1a03ed-b60c-4a9e-b8ab-784f440e8a3b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Needs Photo Change"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ JSON.parse($json.output[0].content[0].text).intent }}",
+                    "rightValue": "change_recipe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "fa992790-3b7d-446b-9520-9216438c52be"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Needs Recipe Change"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ JSON.parse($json.output[0].content[0].text).intent }}",
+                    "rightValue": "skip",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "ec00b417-bd8b-4f8c-b8e4-665a2a4ab0d3"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Skip"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1152,
+        12816
+      ],
+      "id": "7aa9db36-5cee-442c-8fda-988dcf6ce8d3",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $json.body.data.text }}"
+            },
+            {
+              "role": "system",
+              "content": "You are an intent classification router for a recipe review workflow. Read the reviewer's reply about an AI-generated recipe and photo and classify it into exactly one of four intents: 'approve' (they like it, publish as-is), 'change_photo' (they only want the image changed - lighting, plate, background, angle, styling), 'change_recipe' (they want the recipe itself changed - different ingredients, dish, difficulty, dietary style, portion), 'skip' (they want to skip this recipe entirely and move to the next one). Output ONLY a raw JSON object with two keys: 'intent' (one of the four values above) and 'feedback' (the specific instructions they gave, or null if intent is 'approve' or 'skip')."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -1504,
+        12848
+      ],
+      "id": "7b82fc03-57d9-41ce-b53d-c1604f2984ad",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Ncf6pjDUIlgNZgmi",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "1017116393",
+        "binaryData": true,
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": []
+        },
+        "additionalFields": {
+          "caption": "=🍽️ New Recipe: {{ $('Define Meal Types').item.json.recipe_idea }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2624,
+        12912
+      ],
+      "id": "45856e36-ed21-4e2a-b9cc-beb8ac82ba36",
+      "name": "Send a photo message",
+      "webhookId": "f4d55122-bff6-48c1-ab03-354290f5b56e",
+      "credentials": {
+        "telegramApi": {
+          "id": "1WQbjaHWsF1Cf4eV",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3424,
+        13648
+      ],
+      "id": "eaea1b69-6c46-45f3-9507-6394fed153e8",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "content": "Sends an immediate email notification with the recipe details and live link the moment publishing is complete.",
+        "height": 416,
+        "width": 736
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -736,
+        12800
+      ],
+      "typeVersion": 1,
+      "id": "a9833153-be3a-4255-95d1-77af9be5adcb",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "Automatically records the date, recipe title, and live web link into the tracking database.",
+        "height": 448,
+        "width": 528
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -752,
+        13232
+      ],
+      "typeVersion": 1,
+      "id": "d78950b7-61a5-4214-9c55-6647979cb7f7",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA",
+          "mode": "list",
+          "cachedResultName": "Recipe Generation Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Blad1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.setZone('Europe/Brussels').toFormat('yyyy-MM-dd HH:mm') }}",
+            "Recipe Title": "={{ JSON.parse($('Generate Recipe Text (AI)').item.json.text.replace(/```json|```/gi, '')).title }}",
+            "Live URL": "=https://www.afslanking.be/?p=){{ $json.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Recipe Title",
+              "displayName": "Recipe Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Live URL",
+              "displayName": "Live URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        96,
+        13008
+      ],
+      "id": "d2f31ba9-dcc0-4844-bab9-5b7ce0f060ea",
+      "name": "Log to Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7rg1DZORMWQdL19f",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Combines the text and image, formatting them into the custom layout, and publishes the final post to the site.",
+        "height": 752,
+        "width": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1536,
+        12656
+      ],
+      "typeVersion": 1,
+      "id": "228985f4-34ba-4d7a-93d2-174874821bb7",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.afslanking.be/wp-json/wp/v2/recept",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).title }}\",\n  \"featured_media\": {{ $json.id }},\n  \"status\": \"publish\",\n  \"recept_categorie\": [{{ $('Define Meal Types').item.json.category_id }}],\n  \"acf\": {\n    \"recipe_preparation_time\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_preparation_time }}\",\n    \"recipe_cooking_time\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_cooking_time }}\",\n    \"recipe_portions\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_portions }}\",\n    \"recipe_easy_difficulty\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_easy_difficulty }}\",\n    \"recipe_total_calories\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_total_calories }}\",\n    \"recipe_protein\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_protein }}\",\n    \"recipe_nutrational_value_per_serving\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_nutritional_value_per_serving }}\",\n    \"recipe_nutrition\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_nutritional_value_per_serving }}\",\n    \"recipe_carbs\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_carbs }}\",\n    \"recipe_fat\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_fat }}\",\n    \"recipe_ingredients\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_ingredients }}\",\n    \"recipe_instructions\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_instructions }}\",\n    \"recipe_tips\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_tips }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -352,
+        13008
+      ],
+      "id": "da709135-9a3e-467d-94fd-246f0fa22099",
+      "name": "Publish Live Recipe",
+      "credentials": {
+        "wordpressApi": {
+          "id": "nAbiZDC94410Koxh",
+          "name": "Wordpress account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Securely transfers and saves the AI-generated photographs directly into the WordPress database.",
+        "height": 464,
+        "width": 608
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2208,
+        12688
+      ],
+      "typeVersion": 1,
+      "id": "2b7d2a2d-26f4-4a70-8675-897dbdc6ff0f",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.afslanking.be/wp-json/wp/v2/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -640,
+        13008
+      ],
+      "id": "e5fa4d4b-a1ec-4526-9ae0-c2fac8398a0b",
+      "name": "Upload to Media Library",
+      "credentials": {
+        "wordpressApi": {
+          "id": "nAbiZDC94410Koxh",
+          "name": "Wordpress account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Assigns unique, dynamic filenames to the generated images to ensure the website securely accepts them.",
+        "height": 464,
+        "width": 384
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2640,
+        12688
+      ],
+      "typeVersion": 1,
+      "id": "3f9b4502-4247-4c3d-b339-ad7b576ab511",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// 1. Reach back and grab the photo directly from the AI generation node\nconst imageBinary = $('Create Food Photo (AI)').item.binary;\n\nfor (let i = 0; i < items.length; i++) {\n  // 2. If the image exists, attach it to our current flow\n  if (imageBinary && imageBinary.data) {\n    items[i].binary = {\n      data: imageBinary.data\n    };\n    \n    // 3. Rename the file for WordPress\n    items[i].binary.data.fileName = `recipe-featured-image-${i+1}.png`;\n  }\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        13008
+      ],
+      "id": "e95a3315-667b-4cd5-a843-69e5a0e7f6a6",
+      "name": "Format Image Files"
+    },
+    {
+      "parameters": {
+        "content": "Generates a high-quality, professional food photograph perfectly matched to the recipe.",
+        "height": 432,
+        "width": 528
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3232,
+        12816
+      ],
+      "typeVersion": 1,
+      "id": "622a57ed-dd99-4189-a8d5-c5cb0f6c080a",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-image-1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-IMAGE-1-MINI"
+        },
+        "prompt": "==Create a premium, realistic food photograph of: {{ $('Regenerate Recipe Text (AI)').isExecuted ? (JSON.parse($('Regenerate Recipe Text (AI)').last().json.text.replace(/```json|```/gi,'')).title || 'gerecht') : (JSON.parse($('Loop Over Items').first().json.text.replace(/```json|```/gi,'')).title || 'gerecht') }}.\n\nStyle: high-end healthy food photography, natural daylight, soft shadows, elegant plating, realistic textures, appetizing, clean but not sterile, premium lifestyle food styling.\n\nComposition:\n- Show the dish from a 45-degree angle or slightly top-down, whichever suits the meal best.\n- Use a ceramic plate or bowl.\n- Add natural garnish and realistic textures.\n- Include subtle styling props when relevant, such as a linen napkin, wooden table, cutlery or small ingredient details.\n- Background should feel warm, soft and premium, not plain white cutout.\n- The food should look fresh, vibrant and realistic, not artificial or cartoonish.\n\nBrand fit:\n- The image must suit a premium healthy lifestyle brand like Afslanking.be.\n- Focus on meals that feel satisfying, healthy and visually rich.\n- Avoid bland presentation.\n- Avoid overly fake symmetry.\n- Avoid isolated product-style white background visuals.\n\nImportant:\n- Make the dish look natural and delicious.\n- Use realistic portion sizes.\n- Highlight freshness, colour and texture.\n\nStyle Instructions from creative direction (follow exactly, including any background/setting override the client specifically requested):\n{{ JSON.parse($('Smart Image Stylist (AI)').item.json.output[0].content[0].text.replace(/```json|```/gi, '')).style_prompt }}\n\n{{ $('Code in JavaScript').isExecuted && $('Code in JavaScript').last().json.feedback ? ('IMPORTANT - the client\\'s exact request, follow it precisely and do not ignore it: \"' + $('Code in JavaScript').last().json.feedback + '\"') : '' }}",
+        "options": {
+          "quality": "high",
+          "size": "1024x1024"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -2848,
+        12912
+      ],
+      "id": "5204b549-77b2-47ac-ac02-8fc080653b9a",
+      "name": "Create Food Photo (AI)",
+      "credentials": {
+        "openAiApi": {
+          "id": "Ncf6pjDUIlgNZgmi",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Uses artificial intelligence to write the unique Dutch recipe title, ingredients, and instructions.",
+        "height": 416,
+        "width": 592
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3808,
+        13440
+      ],
+      "typeVersion": 1,
+      "id": "422fde52-dc96-4b79-9989-6c881f2f2f00",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Act as a master nutritionist and gourmet chef. I need you to create a highly unique, delicious, and healthy weight-loss recipe for {{ $json.meal_type }}.\n\nCRITICAL INSTRUCTION: You MUST base this recipe on this exact dish idea: {{ $json.recipe_idea }}. Do not generate generic or standard recipes. Use diverse global cuisines, creative flavor profiles, and vibrant ingredients to ensure this recipe is entirely unique and exciting.\n\nYou MUST return ONLY a raw, valid JSON object with NO markdown formatting (no json blocks) and NO extra text. Use these EXACT eleven keys, and ensure all generated text is in Dutch:\n\n\"title\": (an engaging, mouth-watering Dutch title)\n\n\"recipe_preparation_time\": (hands-on prep time before cooking starts, e.g., \"15 Minuten\")\n\n\"recipe_cooking_time\": (actual active cooking/baking time, e.g., \"25 Minuten\")\n\n\"recipe_portions\": (e.g. \"2 personen\")\n\n\"recipe_easy_difficulty\": (exactly one of: \"Makkelijk\", \"Gemiddeld\", or \"Moeilijk\")\n\n\"recipe_total_calories\": (e.g., \"520 KCAL\")\n\n\"recipe_protein\": (e.g., \"38 g\")\n\n\"recipe_carbs\": (grams of carbohydrates per serving, same format as protein, e.g., \"47 g\")\n\n\"recipe_fat\": (grams of fat per serving, same format as protein, e.g., \"18 g\")\n\n\"recipe_nutritional_value_per_serving\": (as an HTML bullet list covering all 4 values in Dutch, e.g. <ul><li>Calorieën: 520 kcal</li><li>Eiwitten: 38 g</li><li>Koolhydraten: 47 g</li><li>Vetten: 18 g</li></ul>)\n\n\"recipe_ingredients\": (as HTML bullet points <ul><li>...</li></ul>)\n\n\"recipe_instructions\": (as HTML numbered steps <ol><li>...</li></ol>)\n\n\"recipe_tips\": (as an HTML bullet list of exactly 3 distinct, useful Dutch tips, e.g. <ul><li>Tip 1</li><li>Tip 2</li><li>Tip 3</li></ul>)",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert weight-loss nutritionist and SEO copywriter for afslanking.be. Write entirely in Dutch"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -3776,
+        13648
+      ],
+      "id": "6cfcaf34-4edb-4c4e-b690-0396cad75556",
+      "name": "Generate Recipe Text (AI)"
+    },
+    {
+      "parameters": {
+        "content": "Prepares the system to process three distinct meals per run: Breakfast, Lunch, and Dinner."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4960,
+        11520
+      ],
+      "typeVersion": 1,
+      "id": "64821561-a79f-4d9e-801b-11e1df8cb149",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Attaches the WordPress category ID to each queued recipe. No AI\n// invention step anymore - everything here came straight from the client's\n// Recipe Queue sheet.\nconst categoryMap = { 'Breakfast': 5, 'Lunch': 6, 'Dinner': 26, 'Snack': 0 /* TODO: replace 0 with the real WordPress category ID for Snack */ };\n\nconst items = $input.all();\nreturn items.map(item => {\n  const meal_type = item.json.meal_type;\n  return {\n    json: {\n      meal_type,\n      category_id: categoryMap[meal_type],\n      recipe_idea: item.json.recipe_idea,\n      sheet_row_number: item.json.sheet_row_number || null\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4000,
+        13648
+      ],
+      "id": "ae5c38c7-95a0-463d-bd03-3acfb03f2978",
+      "name": "Define Meal Types"
+    },
+    {
+      "parameters": {
+        "content": "Automatically starts the recipe generation engine every day at 1:00 AM.",
+        "height": 384,
+        "width": 880
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4736,
+        13456
+      ],
+      "typeVersion": 1,
+      "id": "85b20069-00ae-4284-ad0e-c1972f9a5bad",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "sendTo": "agent@afslanking.be",
+        "subject": "=✅ New Recipe Published: {{ JSON.parse($('Generate Recipe Text (AI)').item.json.text.replace(/```json|```/gi, '')).title }}",
+        "message": "=Hallo,\n\nEen nieuw AI-gegenereerd recept is succesvol aangemaakt, opgemaakt en gepubliceerd op de Afslanking website!\n\nReceptdetails:\n- Titel: {{ JSON.parse($('Generate Recipe Text (AI)').item.json.text.replace(/```json|```/gi, '')).title }}\n- Maaltijdtype: {{ $('Define Meal Types').item.json.meal_type }}\n- Live URL: https://www.afslanking.be/?p={{ $('Upload to Media Library').item.json.id }}\n\nDeze invoer is ook automatisch vastgelegd in je tracking spreadsheet.\n\nMet vriendelijke groet,\nJouw Geautomatiseerde Content Engine",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        13248
+      ],
+      "id": "d8a33460-acda-4676-9fbb-6cd4c3d665f8",
+      "name": "Send a message",
+      "webhookId": "2d8323ef-4263-42d5-9dd5-601362f6b6ca",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TxAptWDGFNITYUe8",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -624,
+        13552
+      ],
+      "id": "40ff28be-c0b7-4a00-91c5-23f3d2967b74",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Ncf6pjDUIlgNZgmi",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA",
+          "mode": "list",
+          "cachedResultName": "Recipe Generation Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 957182370,
+          "mode": "list",
+          "cachedResultName": "Receptenwachtrij",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit#gid=957182370"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -4448,
+        13648
+      ],
+      "id": "eb841edc-5cb5-4347-8eb0-c737e87fbec3",
+      "name": "Get Recipe Ideas",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7rg1DZORMWQdL19f",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads all rows from the 'Recipe Queue' sheet. Every meal type (including\n// Snack) works the same way now: a slot only runs today if the client has\n// queued a PENDING idea for it. Nothing is invented - if he hasn't added\n// anything for a slot, that slot is simply skipped, even if that means\n// nothing gets published today at all.\nconst rows = $input.all().map(i => i.json);\nconst pending = rows.filter(r => (r.status || '').toString().toLowerCase() === 'pending');\n\nconst mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];\nconst batch = [];\n\nfor (const mealType of mealTypes) {\n  const match = pending.find(r => (r.meal_type || '').toLowerCase() === mealType.toLowerCase());\n  if (match) {\n    batch.push({\n      json: {\n        meal_type: mealType,\n        recipe_idea: match.recipe_idea,\n        sheet_row_number: match.row_number\n      }\n    });\n  }\n}\n\nreturn batch;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4224,
+        13648
+      ],
+      "id": "8ea4f1e9-8832-4bb4-83ff-115ebc66b65c",
+      "name": "Select Todays Batch"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-5.4-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Recipe title: {{ $('Regenerate Recipe Text (AI)').isExecuted ? JSON.parse($('Regenerate Recipe Text (AI)').last().json.text.replace(/```json|```/gi,'')).title : JSON.parse($('Loop Over Items').first().json.text).title }}\nMeal type: {{ $('Define Meal Types').item.json.meal_type }}\nClient feedback on the photo (if any): {{ $('Code in JavaScript').isExecuted ? $('Code in JavaScript').last().json.feedback : 'None yet - first version, use your best on-brand creative judgement.' }}"
+            },
+            {
+              "role": "system",
+              "content": "You are the visual style director for a premium Dutch weight-loss recipe brand (Afslanking.be).\n\nDEFAULT STYLE (use when no specific background/setting feedback has been given): premium, realistic healthy-lifestyle food photography — natural daylight, soft shadows, elegant plating on a ceramic plate or bowl, realistic textures, appetizing but not sterile. Warm, soft, premium background (e.g. linen napkin, wooden table, subtle cutlery or ingredient props) — NOT an isolated product shot, NOT a plain white or transparent cutout background.\n\nOVERRIDE — READ THIS FIRST, IT TAKES PRIORITY OVER THE DEFAULT ABOVE: if the client's feedback explicitly names a different background, color, surface, setting, or scene (examples: \"dark blue background\", \"isolated on white\", \"in a kitchen\"), your style_prompt MUST describe exactly that background/setting instead. Do not soften this or revert to the default — if they ask for it, the final image must have it, full stop.\n\nRules that always apply no matter which background is used: bright, natural, appetizing lighting, no dark or moody shadows, no artificial/cartoonish look, vary the plate/bowl shape and garnish angle between recipes so photos don't look identical, realistic portion sizes, highlight freshness/color/texture.\n\nReturn ONLY a raw JSON object: {\"style_prompt\": \"...\"} with no markdown or extra text. The style_prompt itself must explicitly state the background/setting/composition to use (the premium lifestyle default, or the client's requested background when one was given) so there is no ambiguity for whoever reads it next."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -3200,
+        13088
+      ],
+      "id": "bce8f169-1de9-43a0-a571-4d526c5ff197",
+      "name": "Smart Image Stylist (AI)",
+      "credentials": {
+        "openAiApi": {
+          "id": "Ncf6pjDUIlgNZgmi",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Client asked to change the RECIPE itself (not just the photo).\n// Carry the original meal_type/category/idea forward plus their feedback.\nconst parsed = JSON.parse($json.output[0].content[0].text);\nreturn {\n  json: {\n    meal_type: $('Define Meal Types').item.json.meal_type,\n    category_id: $('Define Meal Types').item.json.category_id,\n    recipe_idea: $('Define Meal Types').item.json.recipe_idea,\n    feedback: parsed.feedback\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        13248
+      ],
+      "id": "8513d147-da31-4a82-a22f-6e61c3de321f",
+      "name": "Extract Recipe Feedback"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Act as a master nutritionist and gourmet chef. You previously created a recipe for {{ $json.meal_type }} based on this idea: {{ $json.recipe_idea }}.\n\nThe client reviewed it and asked for this change: \"{{ $json.feedback }}\"\n\nCreate an UPDATED version of the recipe that reflects this feedback while staying true to the weight-loss, healthy-eating brand. Use diverse global cuisines and vibrant ingredients.\n\nYou MUST return ONLY a raw, valid JSON object with NO markdown formatting (no json blocks) and NO extra text. Use these EXACT eleven keys, and ensure all generated text is in Dutch:\n\n\"title\": (an engaging, mouth-watering Dutch title)\n\n\"recipe_preparation_time\": (hands-on prep time before cooking starts, e.g., \"15 Minuten\")\n\n\"recipe_cooking_time\": (actual active cooking/baking time, e.g., \"25 Minuten\")\n\n\"recipe_portions\": (e.g. \"2 personen\")\n\n\"recipe_easy_difficulty\": (exactly one of: \"Makkelijk\", \"Gemiddeld\", or \"Moeilijk\")\n\n\"recipe_total_calories\": (e.g., \"520 KCAL\")\n\n\"recipe_protein\": (e.g., \"38 g\")\n\n\"recipe_carbs\": (grams of carbohydrates per serving, same format as protein, e.g., \"47 g\")\n\n\"recipe_fat\": (grams of fat per serving, same format as protein, e.g., \"18 g\")\n\n\"recipe_nutritional_value_per_serving\": (as an HTML bullet list covering all 4 values in Dutch, e.g. <ul><li>Calorieën: 520 kcal</li><li>Eiwitten: 38 g</li><li>Koolhydraten: 47 g</li><li>Vetten: 18 g</li></ul>)\n\n\"recipe_ingredients\": (as HTML bullet points <ul><li>...</li></ul>)\n\n\"recipe_instructions\": (as HTML numbered steps <ol><li>...</li></ol>)\n\n\"recipe_tips\": (as an HTML bullet list of exactly 3 distinct, useful Dutch tips, e.g. <ul><li>Tip 1</li><li>Tip 2</li><li>Tip 3</li></ul>)",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an expert weight-loss nutritionist and SEO copywriter for afslanking.be. Write entirely in Dutch"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -704,
+        13328
+      ],
+      "id": "89fed380-1078-4808-bcbd-5e7e1762d372",
+      "name": "Regenerate Recipe Text (AI)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "264fb235-66d7-46fd-9e88-dcbe764146cc",
+              "leftValue": "={{ $('Define Meal Types').item.json.sheet_row_number }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        320,
+        13008
+      ],
+      "id": "373a36ba-2730-450f-a287-df48f4ac6b37",
+      "name": "Was Sourced From Sheet?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA",
+          "mode": "list",
+          "cachedResultName": "Recipe Generation Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 957182370,
+          "mode": "list",
+          "cachedResultName": "Receptenwachtrij",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yrAZEPqYQXwKfvTzKrblWtdUkrGP7PnqzWMgqmpZBrA/edit#gid=957182370"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Define Meal Types').item.json.sheet_row_number }}",
+            "status": "used"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        544,
+        12944
+      ],
+      "id": "94f2c5b9-ac14-42cf-93e6-dae1ddac07a6",
+      "name": "Mark Recipe Used",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7rg1DZORMWQdL19f",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1017116393",
+        "text": "Do you want to publish this, or make changes? Just reply here with your feedback.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2400,
+        12912
+      ],
+      "id": "e65c27b2-6df6-42e1-a257-d345227926a4",
+      "name": "Send Review Request",
+      "webhookId": "ff636919-d147-4db8-968c-bd5f8e4455b8",
+      "credentials": {
+        "telegramApi": {
+          "id": "1WQbjaHWsF1Cf4eV",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stash the REAL resume URL n8n generates for this execution (includes\n// a security token - do NOT try to rebuild this URL manually, it will\n// 401). The Wait node right after this one is what actually creates the\n// listener; this value is only valid because this Code node runs in the\n// same execution, right before the Wait node.\nconst staticData = $getWorkflowStaticData('global');\nstaticData.pendingResumeUrl = $execution.resumeUrl;\nstaticData.pendingResumeAt = new Date().toISOString();\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2176,
+        12912
+      ],
+      "id": "6b551e98-7a2c-499a-b97c-b5c266a34f92",
+      "name": "Store Resume URL"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "limitWaitTime": true,
+        "resumeAmount": 24,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1952,
+        12912
+      ],
+      "id": "56dd2b72-b6fc-4f1b-b066-ab9d5dc0ea84",
+      "name": "Wait For Reply",
+      "webhookId": "6ec46a58-44a2-451a-9a5d-6956587584d9"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -4720,
+        14288
+      ],
+      "id": "8287622f-a027-4644-a237-7cf2e7be5d2c",
+      "name": "Telegram Listener",
+      "webhookId": "c7f9d2d2-7723-42b7-a625-7280bf0a887e",
+      "credentials": {
+        "telegramApi": {
+          "id": "1WQbjaHWsF1Cf4eV",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst resumeUrl = staticData.pendingResumeUrl;\nconst chatId = String($json.message?.chat?.id || '');\nconst messageText = $json.message?.text || '';\n\nconst isRightChat = chatId === '1017116393';\nconst hasPending = !!resumeUrl && isRightChat;\n\nreturn {\n  json: {\n    hasPending,\n    resumeUrl: hasPending ? resumeUrl : null,\n    messageText\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4496,
+        14288
+      ],
+      "id": "b980ca49-cb58-4ebd-a15c-4171d6d08d98",
+      "name": "Build Resume Payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4e96e150-db8c-4d24-89fd-12c7c12c94d2",
+              "leftValue": "={{ $json.hasPending }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -4272,
+        14288
+      ],
+      "id": "4245dec3-d27a-44aa-9840-134138c8d6d4",
+      "name": "Has Pending Review?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.resumeUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"text\": \"{{ $json.messageText.replace(/\"/g, '\\\\\"') }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4048,
+        14192
+      ],
+      "id": "0f6f0154-82f5-4b54-b079-131a1358d65c",
+      "name": "Resume Paused Review"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\ndelete staticData.pendingResumeUrl;\ndelete staticData.pendingResumeAt;\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3824,
+        14192
+      ],
+      "id": "5e52352c-fd3c-42e5-b82e-40119d274689",
+      "name": "Clear Pending Flag"
+    },
+    {
+      "parameters": {
+        "chatId": "1017116393",
+        "text": "No recipe is currently waiting for your review.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -4048,
+        14384
+      ],
+      "id": "c658d9c0-2256-4322-a86e-906927041bdd",
+      "name": "No Pending Review Notice",
+      "webhookId": "0957b8ee-b3c3-49d4-8921-38cd931586f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "1WQbjaHWsF1Cf4eV",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9f1e2d3c-aaaa-4bbb-8ccc-000000000001",
+              "leftValue": "={{ $json.body && $json.body.data && $json.body.data.text ? $json.body.data.text : '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1728,
+        12912
+      ],
+      "id": "c1593123-e2a0-460d-95ce-b7a98f8fc871",
+      "name": "Check For Reply"
+    },
+    {
+      "parameters": {
+        "jsCode": "// No reply arrived before the 24h limit on \"Wait For Reply\" ran out.\n// Clear the pending-review flag so a later, unrelated Telegram message\n// doesn't try to resume this execution again (it isn't waiting any more).\nconst staticData = $getWorkflowStaticData('global');\ndelete staticData.pendingResumeUrl;\ndelete staticData.pendingResumeAt;\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1440,
+        13184
+      ],
+      "id": "311c49a0-3220-4c26-b1b9-57e3f02b505d",
+      "name": "Handle Review Timeout"
+    },
+    {
+      "parameters": {
+        "chatId": "1017116393",
+        "text": "=⏰ No reply received for \"{{ $('Define Meal Types').item.json.recipe_idea }}\" within 24 hours, so it was skipped (not published). Re-queue it in the sheet to try again.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1152,
+        13184
+      ],
+      "id": "f8ee8707-af6b-4270-98c7-6e3173b1fb7f",
+      "name": "Send Timeout Notice",
+      "webhookId": "e1a2b3c4-aaaa-4bbb-8ccc-000000000004",
+      "credentials": {
+        "telegramApi": {
+          "id": "1WQbjaHWsF1Cf4eV",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "If the client doesn't reply within 24h, the Wait node times out on its own, this branch clears the stale pending-review flag and notifies + skips, instead of jamming the queue forever.",
+        "height": 528,
+        "width": 1056
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4704,
+        14048
+      ],
+      "typeVersion": 1,
+      "id": "2c1bf97d-2e38-4713-a456-fee872eae8c5",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.afslanking.be/wp-json/wp/v2/recept/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"acf\": {\n    \"recipe_preparation_time\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_preparation_time }}\",\n    \"recipe_cooking_time\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_cooking_time }}\",\n    \"recipe_portions\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_portions }}\",\n    \"recipe_easy_difficulty\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_easy_difficulty }}\",\n    \"recipe_total_calories\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_total_calories }}\",\n    \"recipe_protein\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_protein }}\",\n    \"recipe_nutrational_value_per_serving\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_nutritional_value_per_serving }}\",\n    \"recipe_nutrition\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_nutritional_value_per_serving }}\",\n    \"recipe_carbs\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_carbs }}\",\n    \"recipe_fat\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_fat }}\",\n    \"recipe_ingredients\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_ingredients }}\",\n    \"recipe_instructions\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_instructions }}\",\n    \"recipe_tips\": \"{{ JSON.parse($('Generate Recipe Text (AI)').item.json.text).recipe_tips }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -128,
+        13008
+      ],
+      "id": "714b2cf0-0b08-42c3-bcf7-f3b7ccd1427e",
+      "name": "Retry ACF Fields (Separate Call)",
+      "credentials": {
+        "wordpressApi": {
+          "id": "nAbiZDC94410Koxh",
+          "name": "Wordpress account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Some ACF fields (prep time, portions, difficulty, nutrition) save fine manually in wp-admin but were dropped during the single all-in-one REST create call - likely an ACF Location Rule timing issue. This second call re-sends the acf object once the post already fully exists, after category/status have settled.",
+        "height": 640,
+        "width": 1104
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        32,
+        12784
+      ],
+      "typeVersion": 1,
+      "id": "835222b6-db66-455e-b10c-3d94e233b4e5",
+      "name": "Sticky Note10"
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-07-27T05:50:00.014+02:00",
+          "Readable date": "July 27th 2026, 5:50:00 am",
+          "Readable time": "5:50:00 am",
+          "Day of week": "Monday",
+          "Year": "2026",
+          "Month": "July",
+          "Day of month": "27",
+          "Hour": "05",
+          "Minute": "50",
+          "Second": "00",
+          "Timezone": "Europe/Madrid (UTC+02:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Recipe Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Smart Image Stylist (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Format Image Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Recipe Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a photo message": {
+      "main": [
+        [
+          {
+            "node": "Send Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Smart Image Stylist (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Was Sourced From Sheet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Live Recipe": {
+      "main": [
+        [
+          {
+            "node": "Retry ACF Fields (Separate Call)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Media Library": {
+      "main": [
+        [
+          {
+            "node": "Publish Live Recipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Image Files": {
+      "main": [
+        [
+          {
+            "node": "Upload to Media Library",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Food Photo (AI)": {
+      "main": [
+        [
+          {
+            "node": "Send a photo message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Recipe Text (AI)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Meal Types": {
+      "main": [
+        [
+          {
+            "node": "Generate Recipe Text (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Recipe Text (AI)",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Regenerate Recipe Text (AI)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recipe Ideas": {
+      "main": [
+        [
+          {
+            "node": "Select Todays Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Todays Batch": {
+      "main": [
+        [
+          {
+            "node": "Define Meal Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smart Image Stylist (AI)": {
+      "main": [
+        [
+          {
+            "node": "Create Food Photo (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Recipe Feedback": {
+      "main": [
+        [
+          {
+            "node": "Regenerate Recipe Text (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regenerate Recipe Text (AI)": {
+      "main": [
+        [
+          {
+            "node": "Smart Image Stylist (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Was Sourced From Sheet?": {
+      "main": [
+        [
+          {
+            "node": "Mark Recipe Used",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Recipe Used": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Review Request": {
+      "main": [
+        [
+          {
+            "node": "Store Resume URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Resume URL": {
+      "main": [
+        [
+          {
+            "node": "Wait For Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Reply": {
+      "main": [
+        [
+          {
+            "node": "Check For Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Listener": {
+      "main": [
+        [
+          {
+            "node": "Build Resume Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resume Payload": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Review?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Review?": {
+      "main": [
+        [
+          {
+            "node": "Resume Paused Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Pending Review Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Paused Review": {
+      "main": [
+        [
+          {
+            "node": "Clear Pending Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check For Reply": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Review Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Review Timeout": {
+      "main": [
+        [
+          {
+            "node": "Send Timeout Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Timeout Notice": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry ACF Fields (Separate Call)": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "33374f13-8d32-42bc-b10b-eae993fcda5d",
+  "meta": {
+    "instanceId": "c62f8c19eda60ed2ce4e5282bea46fb93afd7a2a7dbe892010c7a0959242f87f"
+  },
+  "nodeGroups": [],
+  "id": "MKdnWqS7Ir6k0qtI",
+  "tags": []
+}
