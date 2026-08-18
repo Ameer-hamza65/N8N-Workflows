@@ -1,0 +1,4104 @@
+{
+  "name": "Milestone 2 - Re-Engagement Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "57ade862-53ce-457e-a7ca-ab508f6e1e25",
+              "leftValue": "={{ $json.context_mode }}",
+              "rightValue": "reuse",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8fe365ab-1842-472f-9d6e-8bdad1265fe9",
+      "name": "If: Needs Context Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        7136,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $('Code: Evaluate Duplicate Send').first().json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "nurture_status",
+                "value": "Re-engaged - Campaign Sent"
+              },
+              {
+                "property": "last_campaign_id",
+                "value": "={{ $('Code: Evaluate Duplicate Send').first().json.campaignId }}"
+              },
+              {
+                "property": "last_campaign_sent_date",
+                "value": "={{ $now.toISO() }}"
+              }
+            ]
+          }
+        },
+        "options": {}
+      },
+      "id": "8be42ecd-88f6-4f6e-aeb7-a22c0682848a",
+      "name": "HubSpot: Update nurture_status",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        4192,
+        1840
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-reengagement",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "4d936fd8-a68c-41cc-836c-afda981a4545",
+      "name": "Webhook: Start Re-engagement1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        592,
+        912
+      ],
+      "webhookId": "69fc7ed5-0a47-4795-843e-eae46a0f1219"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Verifies the request actually came from HubSpot (HubSpot Signature v3).\n// Requires: Webhook node option \"Raw Body\" = true, and an n8n environment\n// variable HUBSPOT_CLIENT_SECRET holding the HubSpot app's client secret.\nconst crypto = require('crypto');\n\nconst input = $input.first().json;\nconst headers = input.headers || {};\nconst rawBody = input.rawBody || JSON.stringify(input.body);\n\nconst signature = headers['x-hubspot-signature-v3'];\nconst timestamp = headers['x-hubspot-request-timestamp'];\nconst clientSecret = '0f39ee21-4072-44e4-b215-a2cf0caf3d8a';\n\nlet valid = false;\nlet reason = '';\n\nif (!clientSecret) {\n  reason = 'HUBSPOT_CLIENT_SECRET is not configured on this n8n instance';\n} else if (!signature || !timestamp) {\n  reason = 'Missing signature or timestamp header';\n} else if (Math.abs(Date.now() - Number(timestamp)) > 5 * 60 * 1000) {\n  reason = 'Timestamp too old - possible replay';\n} else {\n  const method = 'POST';\n  const url = 'https://' + (headers['x-forwarded-host'] || headers.host) + '/webhook/trigger-reengagement';\n  const base = method + url + rawBody + timestamp;\n  const expected = crypto.createHmac('sha256', clientSecret).update(base).digest('base64');\n  if (signature.length === expected.length) {\n    valid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));\n  }\n  if (!valid) reason = 'Signature mismatch';\n}\n\nreturn [{ json: { ...input, signature_valid: valid, signature_invalid_reason: reason } }];\n"
+      },
+      "id": "711f7a63-46a8-48b4-8d5e-db5fe94061c0",
+      "name": "Code: Validate HubSpot Signature1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bb311037-bdd7-4213-b7ea-7aee2912d017",
+              "leftValue": "={{ $json.signature_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4c693c3e-27cf-4bc7-aac1-21ab13912df5",
+      "name": "If: Signature Valid?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        912
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "19b5145b-e179-4d1f-9948-e1c57f2560a2",
+      "name": "No Op: Invalid Signature1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = $input.first().json.body;\n\nif (!Array.isArray(events)) {\n  return [{ json: { skip: true, reason: \"Unexpected payload shape\" } }];\n}\n\nreturn events\n  .filter(e => e.propertyName === 'trigger_re_engagement' && e.propertyValue === 'true')\n  .map(e => ({ json: e }));"
+      },
+      "id": "027577e4-c208-4371-bafa-ae7c0f1434d7",
+      "name": "Code: Split HubSpot Events1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "81a1337e-99eb-460d-aa15-06e0ff9a9c0d",
+              "leftValue": "={{ $json.objectId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4b86d070-6378-4995-8be8-72a493b1ff54",
+      "name": "If: Has Events To Process1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        992
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b7a0ea2e-b499-4c5e-80ec-5b4e43200c4e",
+      "name": "No Op: No Valid Events1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2c911e09-8492-460b-bcc4-adc3799445e4",
+              "name": "cutoffDate",
+              "value": "2026/08/10",
+              "type": "string"
+            },
+            {
+              "id": "5fbf775c-8065-4e61-b13e-a3a7d8f3cbda",
+              "name": "cooldownDays",
+              "value": 90,
+              "type": "number"
+            },
+            {
+              "id": "fbffa88c-8632-434b-8bb8-26d25dc60f0c",
+              "name": "alertCooldownMinutes",
+              "value": 30,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "27dd9c3b-dd48-4fbc-8710-8367d92129d7",
+      "name": "Config: Load Constants1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1632,
+        928
+      ],
+      "notes": "Single source of truth for the Gmail enrichment cutoff date and the cooldown windows. Change values here only."
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "get",
+        "contactId": {
+          "__rl": true,
+          "value": "={{ $('If: Has Events To Process1').first().json.objectId }}",
+          "mode": "id"
+        },
+        "additionalFields": {
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "email",
+                "segment",
+                "campaign_segment",
+                "campaign_eligibility_reason",
+                "ai_context_summary",
+                "ai_personalisation_hook"
+              ]
+            }
+          }
+        }
+      },
+      "id": "4954b1af-0709-4d4a-b99c-f9b35d775a28",
+      "name": "HubSpot: Get Contact by ID1",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        928
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Retries transient HubSpot errors (incl. 429 rate limits) up to 4x with backoff. On a hard failure (e.g. deleted contact) it continues with an error item instead of crashing the execution."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2701ab8-c0ca-42b1-ba83-1171ee791776",
+              "leftValue": "={{ $json.properties?.email?.value }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3129748f-e50f-43c0-aa17-658d90eaf801",
+      "name": "If: Contact Fetch Succeeded?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2288,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('If: Has Events To Process1').first().json;\nconst hs = $('HubSpot: Get Contact by ID1').first().json;\nlet reason = 'Contact fetch failed - possibly deleted or inaccessible after retries';\nif (hs && hs.error) {\n  reason = `Contact fetch failed: ${hs.error.message || JSON.stringify(hs.error)}`;\n}\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    contact_email: '',\n    hubspot_contact_id: event.objectId,\n    segment: '',\n    campaign_segment: '',\n    skip_reason: reason,\n    failed_step: 'HubSpot: Get Contact by ID'\n  }\n}];"
+      },
+      "id": "437d2de1-d7f1-435e-baf1-de02df732c04",
+      "name": "Code: Prep Skip - Contact Deleted1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const props = $('HubSpot: Get Contact by ID1').first().json.properties;\nconst val = (p) => (p && typeof p === 'object' ? p.value : p) || '';\n\nconst email = val(props.email);\nconst campaignSegment = val(props.campaign_segment);\n\nconst campaignIdMap = {\n  'Dropometer reengagement': 'dropometer_reengagement_v1',\n  'Educational reengagement': 'educational_reengagement_v1',\n  'Dropometer onboarding': 'dropometer_onboarding_v1',\n  'Educational onboarding': 'educational_onboarding_v1'\n};\nconst campaignId = campaignIdMap[campaignSegment] || campaignSegment.toLowerCase().replace(/\\s+/g, '_');\n\nconst cooldownDays = Number($('Config: Load Constants1').first().json.cooldownDays || 90);\nconst now = Date.now();\n\n// Only rows for THIS contact + THIS campaign, that were actually Sent\nconst rows = $input.all().map(i => i.json).filter(r =>\n  r['Contact Email'] === email &&\n  r['Status'] === 'Sent' &&\n  (r['Campaign ID'] ? r['Campaign ID'] === campaignId : r['Campaign Segment'] === campaignSegment)\n);\n\nlet inCooldown = false;\nlet mostRecent = null;\n\nfor (const row of rows) {\n  const createdAt = row['Created At'] ? new Date(row['Created At']).getTime() : null;\n  if (createdAt && !isNaN(createdAt) && (!mostRecent || createdAt > mostRecent)) {\n    mostRecent = createdAt;\n  }\n}\n\nif (mostRecent) {\n  const daysSince = (now - mostRecent) / (1000 * 60 * 60 * 24);\n  if (daysSince < cooldownDays) inCooldown = true;\n}\n\nreturn [{\n  json: {\n    contactId: $('HubSpot: Get Contact by ID1').first().json.vid,\n    portalId: $('HubSpot: Get Contact by ID1').first().json['portal-id'],\n    email,\n    segment: val(props.segment),\n    campaign_segment: campaignSegment,\n    campaignId,\n    campaign_eligibility_reason: val(props.campaign_eligibility_reason),\n    ai_context_summary: val(props.ai_context_summary),\n    ai_personalisation_hook: val(props.ai_personalisation_hook),\n    in_cooldown: inCooldown,\n    skip_reason: inCooldown ? `Contact already sent this campaign (ID: ${campaignId}) within the last ${cooldownDays} days` : ''\n  }\n}];"
+      },
+      "id": "3cd6f18d-687f-4067-8101-57f8d4e1136c",
+      "name": "Code: Evaluate Cooldown1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3a0145c-8765-4d05-b88e-ed164ec3057b",
+              "leftValue": "={{ $json.in_cooldown }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "80bb8234-9f01-452b-8003-1e3c070722dd",
+      "name": "If: In Cooldown?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3296,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Code: Evaluate Cooldown1').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    contact_email: d.email,\n    hubspot_contact_id: d.contactId,\n    segment: d.segment,\n    campaign_segment: d.campaign_segment,\n    skip_reason: d.skip_reason,\n    failed_step: 'Google Sheets: Check Idempotency'\n  }\n}];"
+      },
+      "id": "246ae194-3695-473b-9188-3e184aa45785",
+      "name": "Code: Prep Skip - Cooldown1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3504,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Code: Evaluate Cooldown1').first().json;\nconst reengagementCampaigns = ['Dropometer reengagement', 'Educational reengagement'];\n\nlet eligible = true;\nlet reason = '';\n\nif (!d.campaign_segment || d.campaign_segment === 'Not eligible') {\n  eligible = false;\n  reason = `campaign_segment is empty or \"Not eligible\" (value: \"${d.campaign_segment}\")`;\n} else if (d.campaign_eligibility_reason !== 'Eligible') {\n  eligible = false;\n  reason = `campaign_eligibility_reason is not \"Eligible\" (value: \"${d.campaign_eligibility_reason}\")`;\n} else if (d.segment === 'Partner' && reengagementCampaigns.includes(d.campaign_segment)) {\n  eligible = false;\n  reason = `Partner contacts are excluded from re-engagement campaigns (campaign_segment: \"${d.campaign_segment}\")`;\n}\n\nreturn [{ json: { ...d, eligible, skip_reason: reason } }];"
+      },
+      "id": "49ceb810-a5fb-4908-8751-fb7c57bdc919",
+      "name": "Code: Eligibility Gate1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3504,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "882855d8-203b-4599-9259-82e7f8644c67",
+              "leftValue": "={{ $json.eligible }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aadda848-9ad7-4259-9bd9-c82e24283279",
+      "name": "If: Eligible?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3712,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Code: Eligibility Gate1').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    contact_email: d.email,\n    hubspot_contact_id: d.contactId,\n    segment: d.segment,\n    campaign_segment: d.campaign_segment,\n    skip_reason: d.skip_reason,\n    failed_step: 'Code: Eligibility Gate'\n  }\n}];"
+      },
+      "id": "85b8c769-c02e-4b60-bb27-8886c8d9b027",
+      "name": "Code: Prep Skip - Ineligible1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3920,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "25b1828a-cc8a-4f9a-8b13-caf0b76cf5da",
+              "leftValue": "={{ $json.ai_context_summary }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cfa7a5c7-7cd4-4d0b-a0fb-735b0cdbc378",
+              "leftValue": "={{ $json.ai_personalisation_hook }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "72afb006-dd62-4d81-84a8-f96bb80b7eba",
+      "name": "If: Has Existing AI Context?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4320,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "={{ '(from:' + $json.email + ' OR to:' + $json.email + ') after:' + $('Config: Load Constants1').first().json.cutoffDate }}"
+        }
+      },
+      "id": "375a29de-2eff-4ab4-8a16-3be9495ceea2",
+      "name": "Gmail: Search New Messages1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        4544,
+        816
+      ],
+      "alwaysOutputData": true,
+      "webhookId": "b0fde81b-2913-4435-8a9f-59557cab4b3b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PpiXovmZOVgsX8Bp",
+          "name": "Gmail account 3"
+        }
+      },
+      "notes": "Only searches mail newer than the shared cutoff date, so existing AI context is reused instead of re-reading the whole thread."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst valid = items.filter(i => i.json && i.json.id);\nreturn [{ json: { message_count: valid.length, message_ids: valid.map(i => i.json.id) } }];"
+      },
+      "id": "5f315a55-3a83-4e9f-bb63-16cdca9d7972",
+      "name": "Code: Count New Messages1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4752,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4ef990ce-6915-4651-805a-9946c775140c",
+              "leftValue": "={{ $json.message_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ea81788c-797a-4197-af64-39f956aff06d",
+      "name": "If: New Messages Found?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4960,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ids = $('Code: Count New Messages1').first().json.message_ids || [];\nreturn ids.map(id => ({ json: { id } }));"
+      },
+      "id": "14e4d071-9656-43ca-92e8-ac25da585b65",
+      "name": "Code: Expand Message IDs1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5168,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "id": "dbc12428-f579-41bc-9eef-659388ba3d3a",
+      "name": "Get a message (New Only)1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        5376,
+        688
+      ],
+      "webhookId": "c93bdb25-9d56-45e1-8ddd-37b0ec6d1f74",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zV805MxxdyxwOF4C",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function stripHtml(html) {\n  return String(html)\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(p|div|li|tr|h\\d)>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&#x27;/gi, \"'\")\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&#(\\d+);/g, (_, n) => String.fromCharCode(Number(n)))\n    .replace(/\\r/g, '');\n}\nfunction cleanText(text) {\n  return String(text)\n    .replace(/https?:\\/\\/\\S+/gi, ' ')\n    .replace(/^>.*$/gm, '')\n    .replace(/On .* wrote:$/gmi, '')\n    .replace(/View in browser/gi, '')\n    .replace(/unsubscribe/gi, '')\n    .replace(/privacy policy/gi, '')\n    .replace(/powered by .*/gi, '')\n    .replace(/view online/gi, '')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\nfunction getBody(msg) {\n  if (msg.text && msg.text.trim()) return cleanText(msg.text);\n  if (msg.html && msg.html.trim()) return cleanText(stripHtml(msg.html));\n  if (msg.snippet && msg.snippet.trim()) return cleanText(msg.snippet);\n  return '';\n}\nconst bodies = $input.all().map(item => getBody(item.json)).filter(Boolean);\nconst uniqueBodies = [...new Set(bodies)];\nlet newContent = uniqueBodies.join('\\n\\n-------------------------\\n\\n');\nif (newContent.length > 5000) {\n  newContent = newContent.substring(0, 5000) + '\\n\\n...[TRUNCATED]';\n}\nreturn [{ json: { newContent } }];"
+      },
+      "id": "6276c290-8d9c-4de0-b5a5-808675a1c604",
+      "name": "Code: Trim New Messages1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5584,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Code: Eligibility Gate1').first().json;\nlet newContent = '';\ntry { newContent = $('Code: Trim New Messages1').first().json.newContent || ''; } catch (e) {}\n\nconst threadContent =\n  `EXISTING CONTEXT SUMMARY:\\n${c.ai_context_summary}\\n\\n` +\n  `EXISTING PERSONALISATION HOOK:\\n${c.ai_personalisation_hook}\\n\\n` +\n  `NEW MESSAGES SINCE LAST UPDATE:\\n${newContent || '(none)'}`;\n\nreturn [{ json: { ...c, email: c.email, threadContent, context_mode: 'update' } }];"
+      },
+      "id": "f3f047be-1a5e-400d-aa4a-d0d49d5e4b78",
+      "name": "Code: Merge Context (Update Mode)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5792,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Code: Eligibility Gate1').first().json;\nconst threadContent =\n  `EXISTING CONTEXT SUMMARY:\\n${c.ai_context_summary}\\n\\n` +\n  `EXISTING PERSONALISATION HOOK:\\n${c.ai_personalisation_hook}\\n\\n` +\n  `NEW MESSAGES SINCE LAST UPDATE:\\n(none - no new emails since cutoff, reusing existing context to save tokens)`;\n\nreturn [{ json: { ...c, email: c.email, threadContent, context_mode: 'reuse' } }];"
+      },
+      "id": "6a9f6f18-7cc0-434f-9ba5-eb29675b8296",
+      "name": "Code: Use Existing Context Only1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5168,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 30,
+        "filters": {
+          "q": "={{ 'from:' + $('HubSpot: Get Contact by ID1').first().json.properties.email.value + ' OR to:' + $('HubSpot: Get Contact by ID1').first().json.properties.email.value }}"
+        }
+      },
+      "id": "82e1d47a-8cc1-4f62-a679-af2b2488d16a",
+      "name": "Gmail: Fetch Thread History",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        4560,
+        1088
+      ],
+      "webhookId": "a4ccff46-fd27-4c2d-aad5-cb93870dac28",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zV805MxxdyxwOF4C",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "id": "50b49528-e78f-45ff-9263-653c8aaea554",
+      "name": "Get a message1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        4768,
+        1088
+      ],
+      "webhookId": "97862213-4a91-4700-bd41-5222a2b05e81",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zV805MxxdyxwOF4C",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function stripHtml(html) {\n  return String(html)\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/(p|div|li|tr|h\\d)>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&#x27;/gi, \"'\")\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&#(\\d+);/g, (_, n) => String.fromCharCode(Number(n)))\n    .replace(/\\r/g, '');\n}\nfunction cleanText(text) {\n  return String(text)\n    .replace(/https?:\\/\\/\\S+/gi, ' ')\n    .replace(/^>.*$/gm, '')\n    .replace(/On .* wrote:$/gmi, '')\n    .replace(/View in browser/gi, '')\n    .replace(/unsubscribe/gi, '')\n    .replace(/privacy policy/gi, '')\n    .replace(/powered by .*/gi, '')\n    .replace(/view online/gi, '')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\nfunction getBody(msg) {\n  if (msg.text && msg.text.trim()) return cleanText(msg.text);\n  if (msg.html && msg.html.trim()) return cleanText(stripHtml(msg.html));\n  if (msg.snippet && msg.snippet.trim()) return cleanText(msg.snippet);\n  return '';\n}\nconst bodies = $input.all().map(item => getBody(item.json)).filter(Boolean);\nconst uniqueBodies = [...new Set(bodies)];\nlet threadContent = uniqueBodies.join('\\n\\n-------------------------\\n\\n');\nif (threadContent.length > 10000) {\n  threadContent = threadContent.substring(0, 10000) + '\\n\\n...[TRUNCATED]';\n}\nconst rawEmail = $('HubSpot: Get Contact by ID1').first().json.properties.email;\nconst email = typeof rawEmail === 'object' ? rawEmail.value : rawEmail;\n\nconst c = $('Code: Eligibility Gate1').first().json;\nreturn [{ json: { ...c, email, threadContent, context_mode: 'fresh' } }];"
+      },
+      "id": "1968fc5c-f42b-4d7e-bb56-bd2a7833eb32",
+      "name": "Code: Trim Thread Context1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4960,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Code: Eligibility Gate1').first().json;\nconst segment = contact.segment || 'Unknown';\nconst campaignSegment = contact.campaign_segment || 'Unknown';\nconst campaignId = contact.campaignId || campaignSegment.toLowerCase().replace(/\\s+/g, '_');\n\nconst segmentInstructions = {\n  'Customer': \"This contact is an existing Droplet Lab customer. Focus on: unresolved support issues, renewal or expansion signals, and product feedback mentioned in the thread.\",\n  'Prospective Client': \"This contact is a prospect who has not yet purchased. Focus on: objections raised, questions about pricing or specs, and any buying-timeline signals mentioned in the thread.\",\n  'Partner': \"This contact is a business/channel partner. Focus on: collaboration or referral opportunities, joint activity mentioned, and any blockers to the partnership mentioned in the thread.\"\n};\n\nconst campaignInstructions = {\n  'Dropometer onboarding': \"Write the draft as an onboarding nudge for the Dropometer product.\",\n  'Educational onboarding': \"Write the draft as an onboarding nudge for educational content/courses.\",\n  'Dropometer reengagement': \"Write the draft as a win-back / re-engagement message specific to the Dropometer product.\",\n  'Educational reengagement': \"Write the draft as a win-back / re-engagement message specific to educational content/courses.\"\n};\n\nconst instruction = segmentInstructions[segment] || \"No specific segment identified - extract general issues and context as usual.\";\nconst campaignInstruction = campaignInstructions[campaignSegment] || \"No specific campaign identified - write a general re-engagement draft.\";\n\nconst current = $input.first().json;\n\nconst crypto = require('crypto');\nconst executionId = crypto.randomUUID();\nconst idempotencyKey = `${contact.contactId}:${campaignId}:${new Date().toISOString().slice(0,7)}`;\n\nreturn [{\n  json: {\n    ...current,\n    segment,\n    campaign_segment: campaignSegment,\n    campaignId,\n    executionId,\n    idempotencyKey,\n    segmentInstruction: instruction + ' ' + campaignInstruction\n  }\n}];"
+      },
+      "id": "b8249bba-b413-445e-8af0-40406fa82b1f",
+      "name": "Code: Build Segment Prompt1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6352,
+        928
+      ],
+      "notes": "Branches on BOTH segment (tone) and campaign_segment (which campaign), per the revised spec."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ \"Contact Email: \" + $json.email + \"\\n\\nContext mode: \" + $json.context_mode + \"\\n\\nThread History:\\n\" + $json.threadContent }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "options": {
+          "system": "=You are an assistant for Droplet Lab. {{ $json.segmentInstruction }}\n\nIf context_mode is \"update\" or \"reuse\", UPDATE the existing summary/hook rather than rewriting from scratch - preserve prior facts unless the new messages contradict them. If context_mode is \"fresh\", build the summary/hook from scratch.\n\nExtract issues, write a summary, and draft a personalized re-engagement email. Return ONLY valid JSON: {\"issues\":[\"issue1\"], \"summary\":\"\", \"draft_email\":\"\", \"suggested_status\":\"Needs Review\", \"updated_context_summary\":\"\", \"updated_personalisation_hook\":\"\"}. CRITICAL: If you are uncertain about any extracted issue or lack confidence, you must set suggested_status to \"needs_verification\".",
+          "maxTokens": 2000
+        }
+      },
+      "id": "d5539514-61a1-4dbd-8e9e-042fbf39110e",
+      "name": "Advanced AI: Claude Reasoning1",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        6592,
+        928
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "c1rT7akAeUCERCQV",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const json = $input.first().json;\nlet text = \"\";\n\nif (typeof json.text === 'string') {\n    text = json.text;\n} else if (typeof json.content === 'string') {\n    text = json.content;\n} else if (Array.isArray(json.content) && json.content.length > 0 && json.content[0].text) {\n    text = json.content[0].text;\n} else if (json.message?.content) {\n    text = typeof json.message.content === 'string' ? json.message.content : (json.message.content[0]?.text || \"\");\n} else if (Array.isArray(json) && json[0]?.text) {\n    text = json[0].text;\n} else if (json.kwargs?.content) {\n    text = json.kwargs.content;\n}\n\nlet data;\nlet parseSucceeded = true;\nlet parseError = '';\n\ntry {\n  if (!text) throw new Error(\"Could not find Claude's text in the payload\");\n  const start = text.indexOf('{');\n  const end = text.lastIndexOf('}');\n  if (start !== -1 && end !== -1 && end >= start) {\n    data = JSON.parse(text.substring(start, end + 1));\n  } else {\n    throw new Error(\"No JSON object found inside the text\");\n  }\n  if (!data.summary?.trim() || !data.draft_email?.trim()) {\n    throw new Error(\"Parsed JSON missing required fields (summary/draft_email)\");\n  }\n  if (data.draft_email.trim().length < 20) {\n    throw new Error(\"draft_email is too short to be a real email (business validation failed)\");\n  }\n} catch (e) {\n  parseSucceeded = false;\n  parseError = e.message;\n  data = { summary: '', issues: [], draft_email: '', suggested_status: 'Error', updated_context_summary: '', updated_personalisation_hook: '' };\n}\n\nconst eligibility = $('Code: Eligibility Gate1').first().json;\nconst promptData = $('Code: Build Segment Prompt1').first().json;\n\nlet threadId = null;\ntry { threadId = $('Get a message1').first().json.threadId; } catch (e) {}\nif (!threadId) { try { threadId = $('Get a message (New Only)1').first().json.threadId; } catch (e) {} }\n\nreturn [{\n  json: {\n    parse_succeeded: parseSucceeded,\n    parse_error: parseError,\n    email: eligibility.email,\n    context_mode: json.context_mode || '',\n    contactId: eligibility.contactId,\n    portalId: eligibility.portalId,\n    segment: eligibility.segment,\n    campaign_segment: eligibility.campaign_segment,\n    campaignId: promptData.campaignId,\n    executionId: promptData.executionId,\n    idempotencyKey: promptData.idempotencyKey,\n    summary: data.summary,\n    issues: Array.isArray(data.issues) ? data.issues.join(', ') : (data.issues || ''),\n    draft_email: data.draft_email,\n    suggested_status: data.suggested_status || 'Needs Review',\n    updated_context_summary: data.updated_context_summary?.trim() || eligibility.ai_context_summary || '',\n    updated_personalisation_hook: data.updated_personalisation_hook?.trim() || eligibility.ai_personalisation_hook || '',\n    tokens_used: json.usage || { input_tokens: 0, output_tokens: 0 },\n    thread_link: threadId ? `https://mail.google.com/mail/u/0/#inbox/${threadId}` : 'No thread found'\n  }\n}];"
+      },
+      "id": "e5b5471c-74ae-43e4-a8c4-258644e45130",
+      "name": "Code: Parse AI Output1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6928,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4e84296f-fccd-481b-b9f1-9dcc5adba331",
+              "leftValue": "={{ $json.parse_succeeded }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c7ac0b7-59b8-432d-ad48-4e336f2db813",
+      "name": "If: Parse Succeeded?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        7136,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Code: Parse AI Output1').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    contact_email: d.email,\n    hubspot_contact_id: d.contactId,\n    segment: d.segment,\n    campaign_segment: d.campaign_segment,\n    skip_reason: `AI response parsing failed: ${d.parse_error}`,\n    failed_step: 'Code: Parse AI Output'\n  }\n}];"
+      },
+      "id": "0a7307ba-d579-4283-bbcf-867d28362ee2",
+      "name": "Code: Prep Skip - Parse Failed1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7520,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "ai_context_summary",
+                "value": "={{ $json.updated_context_summary }}"
+              },
+              {
+                "property": "ai_personalisation_hook",
+                "value": "={{ $json.updated_personalisation_hook }}"
+              }
+            ]
+          }
+        },
+        "options": {}
+      },
+      "id": "dc2e7708-f6f4-41cb-9378-7e02b776281c",
+      "name": "HubSpot: Update AI Context1",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        7568,
+        704
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Writes Claude's updated summary/hook back onto the contact so the next run can reuse it and skip re-reading the whole thread."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { hs_note_body: (($('Code: Parse AI Output1').first().json.suggested_status === 'needs_verification') ? '⚠️ UNVERIFIED — confirm before acting: ' : '') + $('Code: Parse AI Output1').first().json.summary + '\\n\\nExtracted Issues: ' + $('Code: Parse AI Output1').first().json.issues, hs_timestamp: String(Date.now()) } }) }}",
+        "options": {}
+      },
+      "id": "e05e2cfb-da22-4dbe-adc4-c04fcb6526a9",
+      "name": "HubSpot: Create Note (v3)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        8224,
+        912
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "notes": "Body is built with a single JSON.stringify() expression so nothing Claude writes can break the JSON payload."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v4/associations/note/contact/batch/create",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inputs: [ { from: { id: $json.id }, to: { id: $('Code: Parse AI Output1').first().json.contactId }, types: [ { associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 202 } ] } ] }) }}",
+        "options": {}
+      },
+      "id": "ac80f115-2f2e-4e5f-b7cb-f39c0bf7e16f",
+      "name": "HubSpot: Associate Note to Contact (v4)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        8432,
+        912
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Suggested Status": "={{ $('Code: Parse AI Output1').first().json.suggested_status }}",
+            "Status": "Needs Review",
+            "Campaign ID": "={{ $('If: Needs Context Update?').item.json.campaignId }}",
+            "Execution ID": "={{ $('If: Needs Context Update?').item.json.executionId }}",
+            "Idempotency Key": "={{ $('If: Needs Context Update?').item.json.idempotencyKey }}",
+            "AI Prompt/Content": "={{ $('If: Needs Context Update?').item.json.draft_email }}",
+            "Campaign Name": "={{ $('If: Needs Context Update?').item.json.campaign_segment }}",
+            "ID": "={{ $('If: Needs Context Update?').item.json.contactId }}",
+            "User Segment": "={{ $('If: Needs Context Update?').item.json.segment }}",
+            "Contact Email": "={{ $('If: Needs Context Update?').item.json.email }}",
+            "Created At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign Name",
+              "displayName": "Campaign Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign ID",
+              "displayName": "Campaign ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User Segment",
+              "displayName": "User Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Engagement Date",
+              "displayName": "Last Engagement Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Re-engagement Strategy",
+              "displayName": "Re-engagement Strategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Prompt/Content",
+              "displayName": "AI Prompt/Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Expected Uplift",
+              "displayName": "Expected Uplift",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approver",
+              "displayName": "Approver",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approval Date",
+              "displayName": "Approval Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback/Comments",
+              "displayName": "Feedback/Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "be506880-827f-4690-937a-50f415ece289",
+      "name": "Google Sheets: Push to Review Board1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        8640,
+        912
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "No Encharge call happens before this step anymore - the draft only reaches marketing automation after a human approves it (see Flow B)."
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $('Code: Eligibility Gate1').first().json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "trigger_re_engagement",
+                "value": "false"
+              }
+            ]
+          }
+        },
+        "options": {}
+      },
+      "id": "f443c54a-e06d-459d-8d1f-cd89d30e5b05",
+      "name": "HubSpot: Reset Trigger Flag1",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        9072,
+        1040
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Uses the original webhook objectId (not a lookup by email) so this always runs, even on the deleted-contact / skip paths."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 626725024,
+          "mode": "list",
+          "cachedResultName": "Skipped Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=626725024"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Contact Email": "={{ $json.contact_email }}",
+            "HubSpot Contact ID": "={{ $json.hubspot_contact_id }}",
+            "Segment": "={{ $json.segment }}",
+            "Campaign Segment": "={{ $json.campaign_segment }}",
+            "Skip Reason": "={{ $json.skip_reason }}",
+            "Failed Step": "={{ $json.failed_step }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Segment",
+              "displayName": "Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Campaign Segment",
+              "displayName": "Campaign Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Failed Step",
+              "displayName": "Failed Step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9e2e632b-8cd2-43d3-945c-23b9484d9e45",
+      "name": "Google Sheets: Push to Skipped Log1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4944,
+        1728
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Requires a 'Skipped Log' tab in the same spreadsheet with columns: Timestamp, Contact Email, HubSpot Contact ID, Segment, Campaign Segment, Skip Reason, Failed Step."
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "event": "rowUpdate",
+        "options": {
+          "columnsToWatch": [
+            "Status"
+          ]
+        }
+      },
+      "id": "b7e75b93-0bb5-4174-98bb-ab356e70adea",
+      "name": "Google Sheets Trigger: Watch Review Board1",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        1872
+      ],
+      "pollTimes": {
+        "item": [
+          {
+            "mode": "everyMinute"
+          }
+        ]
+      },
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "7DMQq1XiS1h47pES",
+          "name": "Google Sheets Trigger account"
+        }
+      },
+      "notes": "Polls the Review Board sheet for row changes. Fires whenever a salesperson edits a row (e.g. sets Status to Approved)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4a59cde8-3823-4d72-9a67-a10382f92177",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a791fd15-a86b-4d5a-b92f-eccf7bc741b9",
+      "name": "If: Status Approved?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1632,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "get",
+        "contactId": {
+          "__rl": true,
+          "value": "={{ $json['ID'] }}",
+          "mode": "id"
+        },
+        "additionalFields": {
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "email",
+                "segment",
+                "campaign_segment",
+                "campaign_eligibility_reason",
+                "hs_email_optout",
+                "hs_email_bad_address",
+                "hs_email_is_ineligible"
+              ]
+            }
+          }
+        }
+      },
+      "id": "c86610e2-25e4-4c10-9734-0e4b515dd3e6",
+      "name": "HubSpot: Get Contact (Live - Approval Check)1",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        1872
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Re-fetches the contact at approval time - a lot can change between draft creation and human approval (unsubscribe, deal closed, segment change, etc)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const hsData = $input.first().json;\nconst props = hsData.properties || {};\n\nconst val = (p) => {\n  if (p && typeof p === 'object') {\n    return p.value ?? '';\n  }\n  return p ?? '';\n};\n\nconst toBool = (p) => {\n  return String(val(p)).toLowerCase() === 'true';\n};\n\nconst segment = val(props.segment);\nconst campaignSegment = val(props.campaign_segment);\nconst eligibilityReason = val(props.campaign_eligibility_reason);\n\nconst reengagementCampaigns = [\n  'Dropometer reengagement',\n  'Educational reengagement'\n];\n\n// ============================================================\n// FINAL-SEND SUPPRESSION CHECKS\n// ============================================================\n\nconst optedOut = toBool(props.unsubscribed_from_all_email);\nconst badEmail = toBool(props.invalid_email_address);\nconst globallyIneligible = toBool(props.is_globally_ineligible);\n\n// ============================================================\n// LIVE ELIGIBILITY\n// ============================================================\n\nlet eligible = true;\nlet reason = '';\n\nif (!props.email) {\n  eligible = false;\n  reason = 'Contact could not be re-fetched from HubSpot (deleted or inaccessible)';\n}\nelse if (!campaignSegment || campaignSegment === 'Not eligible') {\n  eligible = false;\n  reason = `campaign_segment is now empty or \"Not eligible\" (value: \"${campaignSegment}\")`;\n}\nelse if (eligibilityReason !== 'Eligible') {\n  eligible = false;\n  reason = `campaign_eligibility_reason is now not \"Eligible\" (value: \"${eligibilityReason}\")`;\n}\nelse if (segment === 'Partner' && reengagementCampaigns.includes(campaignSegment)) {\n  eligible = false;\n  reason = 'Partner contacts are excluded from re-engagement campaigns';\n}\nelse if (optedOut) {\n  eligible = false;\n  reason = 'Contact has unsubscribed from all email';\n}\nelse if (badEmail) {\n  eligible = false;\n  reason = 'Email address is invalid';\n}\nelse if (globallyIneligible) {\n  eligible = false;\n  reason = 'Contact is globally ineligible';\n}\n\n// ============================================================\n// ORIGINAL REVIEW BOARD ROW\n// Preserve IDs generated in Flow A.\n// ============================================================\n\nconst triggerRow = $('Google Sheets Trigger: Watch Review Board1').first().json;\n\n// ============================================================\n// OUTPUT\n// ============================================================\n\nreturn [{\n  json: {\n    email: val(props.email),\n    contactId: triggerRow['ID'] || '',\n    segment,\n    campaign_segment: campaignSegment,\n    campaignId: triggerRow['Campaign ID'] || '',\n    executionId: triggerRow['Execution ID'] || '',\n    idempotencyKey: triggerRow['Idempotency Key'] || '',\n    eligible,\n    reason\n  }\n}];"
+      },
+      "id": "7766bef1-5462-48a3-bd9f-279f16e1b546",
+      "name": "Code: Live Eligibility Check1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0aa475c7-65b1-46c7-bf31-6f83d51913b6",
+              "leftValue": "={{ $json.eligible }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1884a9a6-3c6f-4249-bf2e-6bccaa1c2b7c",
+      "name": "If: Still Eligible?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2480,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.email, tag: 'reengage_approved_sent' }) }}",
+        "options": {}
+      },
+      "id": "205d300b-b633-4859-91d9-b64da71eccd4",
+      "name": "HTTP Request: Encharge Tagging (Approved)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3744,
+        1856
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Encharge is only ever tagged AFTER a human approves the draft AND a live eligibility re-check passes."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Sent",
+            "row_number": 0,
+            "Execution ID": "={{ $('If: Already Sent?').item.json.executionId }}"
+          },
+          "matchingColumns": [
+            "Execution ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign Name",
+              "displayName": "Campaign Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign ID",
+              "displayName": "Campaign ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User Segment",
+              "displayName": "User Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Engagement Date",
+              "displayName": "Last Engagement Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Re-engagement Strategy",
+              "displayName": "Re-engagement Strategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Prompt/Content",
+              "displayName": "AI Prompt/Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Expected Uplift",
+              "displayName": "Expected Uplift",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approver",
+              "displayName": "Approver",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approval Date",
+              "displayName": "Approval Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback/Comments",
+              "displayName": "Feedback/Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cd9d07b8-2511-44f1-8406-6bd33bf8ee5f",
+      "name": "Google Sheets: Mark Sent1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4400,
+        1840
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Blocked - Ineligible At Send Time",
+            "Suggested Status": "={{ $json.reason }}",
+            "row_number": 0,
+            "Execution ID": "={{ $json.executionId }}"
+          },
+          "matchingColumns": [
+            "Execution ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign Name",
+              "displayName": "Campaign Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign ID",
+              "displayName": "Campaign ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User Segment",
+              "displayName": "User Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Engagement Date",
+              "displayName": "Last Engagement Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Re-engagement Strategy",
+              "displayName": "Re-engagement Strategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Prompt/Content",
+              "displayName": "AI Prompt/Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Expected Uplift",
+              "displayName": "Expected Uplift",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approver",
+              "displayName": "Approver",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approval Date",
+              "displayName": "Approval Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback/Comments",
+              "displayName": "Feedback/Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e14a8a0c-081c-408d-a05e-6f5af8e46de3",
+      "name": "Google Sheets: Mark Blocked1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2944,
+        2160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "If the contact is no longer eligible by the time a human approves the draft, nothing is sent - the row is marked blocked with the reason instead."
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.first().json.execution?.error || {};\nconst nodeName = err.node?.name || 'Unknown Node';\nconst message = (err.message || 'Unknown error').substring(0, 200);\nconst signature = `${nodeName}::${message}`.substring(0, 250);\n\nreturn [{\n  json: {\n    error_signature: signature,\n    error_node: nodeName,\n    error_message: message,\n    execution_url: $input.first().json.execution?.url || '',\n    workflow_name: $input.first().json.workflow?.name || ''\n  }\n}];"
+      },
+      "id": "717411f8-4d14-4ffa-89e5-c74fe156caa6",
+      "name": "Code: Build Error Signature1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2068759052,
+          "mode": "list",
+          "cachedResultName": "Alert Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=2068759052"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Error Signature",
+              "lookupValue": "={{ $('Code: Build Error Signature1').first().json.error_signature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ce7ef453-2b42-44d6-b526-2837b130eac4",
+      "name": "Google Sheets: Lookup Alert Log1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Requires an 'Alert Log' tab with columns: Error Signature, Error Node, Error Message, First Seen, Last Seen, Count, Execution URL, Workflow Name."
+    },
+    {
+      "parameters": {
+        "jsCode": "const sig = $('Code: Build Error Signature1').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r['Error Signature']);\nconst cooldownMinutes = 30;\nconst now = Date.now();\n\nlet existing = rows.length ? rows[rows.length - 1] : null;\nlet sendAlert = true;\nlet firstSeen = new Date().toISOString();\nlet count = 1;\n\nif (existing) {\n  const lastSeen = existing['Last Seen'] ? new Date(existing['Last Seen']).getTime() : 0;\n  const minutesSince = (now - lastSeen) / (1000 * 60);\n  firstSeen = existing['First Seen'] || firstSeen;\n  count = (Number(existing['Count']) || 0) + 1;\n  sendAlert = minutesSince > cooldownMinutes;\n}\n\nreturn [{ json: { ...sig, first_seen: firstSeen, last_seen: new Date().toISOString(), count, send_alert: sendAlert } }];"
+      },
+      "id": "a5b5ce90-bb2c-4aa4-8be9-d24c80b72508",
+      "name": "Code: Compute Alert Decision1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0b0442af-bc39-4762-8bae-c92ad0c5e683",
+              "leftValue": "={{ $json.send_alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c61f45d4-512d-4fb1-8c7a-5c0d338fa539",
+      "name": "If: Should Send Alert?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2576,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "ameerhmza547@gmail.com",
+        "subject": "={{ 'Re-engagement flow failed (x' + $json.count + '): ' + $json.error_node }}",
+        "message": "={{ 'Error: ' + $json.error_message + '\\n\\nNode: ' + $json.error_node + '\\n\\nOccurrences (incl this one): ' + $json.count + '\\n\\nView execution: ' + $json.execution_url }}",
+        "options": {}
+      },
+      "id": "6f4b1e9a-f1b9-4493-af9d-c7d43587f965",
+      "name": "Gmail: Error Alert1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2784,
+        112
+      ],
+      "webhookId": "62f0f000-6386-4190-9263-1beed2fc06c4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2068759052,
+          "mode": "list",
+          "cachedResultName": "Alert Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=2068759052"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Error Signature": "={{ $json.error_signature }}",
+            "Error Node": "={{ $json.error_node }}",
+            "Error Message": "={{ $json.error_message }}",
+            "First Seen": "={{ $json.first_seen }}",
+            "Last Seen": "={{ $json.last_seen }}",
+            "Count": "={{ $json.count }}",
+            "Execution URL": "={{ $json.execution_url }}",
+            "Workflow Name": "={{ $json.workflow_name }}"
+          },
+          "matchingColumns": [
+            "Error Signature"
+          ],
+          "schema": [
+            {
+              "id": "Error Signature",
+              "displayName": "Error Signature",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Error Node",
+              "displayName": "Error Node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Error Message",
+              "displayName": "Error Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "First Seen",
+              "displayName": "First Seen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Seen",
+              "displayName": "Last Seen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Count",
+              "displayName": "Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Execution URL",
+              "displayName": "Execution URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Workflow Name",
+              "displayName": "Workflow Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3717697a-3c1a-4fab-838e-998265b52c50",
+      "name": "Google Sheets: Log Alert1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2992,
+        192
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Repeated identical errors are deduped: only one email every 30 minutes per error signature, but every occurrence still increments Count here."
+    },
+    {
+      "parameters": {
+        "content": "**Trigger & Signature Validation**\nStarts when a rep checks 'Trigger Re-engagement' on a HubSpot contact.\n\nThe raw webhook body is verified against HubSpot's Signature v3 header (HMAC using the app's client secret, env var HUBSPOT_CLIENT_SECRET) before anything else runs. Only then are valid trigger_re_engagement=true events extracted.",
+        "height": 480,
+        "width": 1476
+      },
+      "id": "3111e665-b5b0-405f-a73d-8a7f4a18dc33",
+      "name": "Sticky: 2048-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        528,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Contact Retrieval, Rate-Limit Protection & Deleted-Contact Handling**\nHubSpot fetch now requests all 6 properties needed downstream, retries 429/5xx up to 4x fixed 3s retry, and no longer crashes the execution if the contact was deleted during a database cleanup - it routes to the Skipped Log instead.",
+        "height": 480,
+        "width": 740
+      },
+      "id": "5f6c70f7-a925-4729-9704-b7fd0a269b44",
+      "name": "Sticky: 3168-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Idempotency + Cooldown + Eligibility Gate**\nDedup key is now Contact Email + Campaign Segment (not email alone), with a 90-day cooldown. A separate eligibility gate then checks campaign_eligibility_reason == 'Eligible', rejects empty/'Not eligible' campaign_segment, and excludes Partners from reengagement campaigns. Anything rejected goes to the shared Skipped Log - no error email is generated for expected business skips.",
+        "height": 480,
+        "width": 1316
+      },
+      "id": "ae59c4fb-f7c4-4064-8af7-f1fde4829f7a",
+      "name": "Sticky: 3872-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Context Reuse Branch**\nIf the contact already has ai_context_summary + ai_personalisation_hook, Gmail is only searched for messages after the shared cutoff date (Config node). No new messages -> Claude reuses the stored context untouched (near-zero Gmail/token cost). New messages -> only the new messages are trimmed and merged with the existing context. First-time contacts fall back to the original full-thread path.",
+        "height": 608,
+        "width": 1732
+      },
+      "id": "03c62229-e172-457a-9bc4-a15d6ff01687",
+      "name": "Sticky: 4704-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**AI Analysis, Parse Gate & Context Write-Back**\nmaxTokens raised to 2000. The parser now sets parse_succeeded=false on malformed/incomplete JSON instead of silently forwarding an 'Error' string into HubSpot - a dedicated IF gate keeps any failed parse out of the CRM and routes it to the Skipped Log. On success, Claude's updated summary/hook are written back onto the HubSpot contact so future runs can reuse them.",
+        "height": 700,
+        "width": 1684
+      },
+      "id": "2055f1dd-8b84-4090-9969-1e3eb9b64a1a",
+      "name": "Sticky: 6592-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6496,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**CRM Update & Human Review (no Encharge here)**\nHubSpot Note body and every downstream HTTP body use a single JSON.stringify() expression, so nothing Claude writes can break the request payload. The draft goes straight to the Review Board for human approval - Encharge is NOT called from this flow anymore.",
+        "height": 512,
+        "width": 884
+      },
+      "id": "85fb6975-1633-404b-a261-48d0370876ff",
+      "name": "Sticky: 7424-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        8368,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Shared Skipped Log**\nEvery expected business skip (deleted contact, cooldown, ineligible, AI parse failure) lands here with a reason instead of triggering an error email. Create a 'Skipped Log' tab in the same spreadsheet with: Timestamp, Contact Email, HubSpot Contact ID, Segment, Campaign Segment, Skip Reason, Failed Step.",
+        "height": 464,
+        "width": 436
+      },
+      "id": "e1e69a75-f87e-47b2-8389-9b6c4349288e",
+      "name": "Sticky: 4288-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4784,
+        1456
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**FLOW B - Approval -> Encharge (separate trigger)**\nPolls the Review Board sheet for edits. When Status becomes 'Approved', the contact is re-fetched live from HubSpot and re-checked against the same eligibility rules before Encharge is ever called - a lot can change between draft creation and human approval. If no longer eligible, the row is marked Blocked with a reason instead of sending.",
+        "height": 448,
+        "width": 1860
+      },
+      "id": "2dc42a43-6ba5-4d94-bf12-46980fc362cd",
+      "name": "Sticky: 2176-",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        1712
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**FLOW C - Error Monitoring With Alert Capping**\nUnhandled system failures (HubSpot down, Sheets down, Anthropic down, credential errors, code exceptions) still raise an email - but identical errors are deduped to one email per 30-minute window per error signature, with every occurrence logged to the Alert Log tab regardless. Expected business conditions no longer reach this trigger at all since they're handled as normal IF branches in Flow A.",
+        "height": 416,
+        "width": 1556
+      },
+      "id": "ebd8ed3f-3285-48ec-b63a-4e15b8b4c73e",
+      "name": "Sticky: 2288--",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        208
+      ],
+      "id": "d6f1b666-5d49-469f-9a68-31395c429428",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "e019c066-8290-4a4b-b81f-c2df5ca2c698",
+      "name": "Google Sheets: Check Cooldown History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2496,
+        992
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Matches on Contact Email + Campaign Segment (not email alone) so the same person can re-enter a different campaign."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cfd4e465-26a1-4e5e-9202-7b12de0c9029",
+              "leftValue": "={{ $json['Execution ID'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1856,
+        1872
+      ],
+      "id": "839d6494-74f1-4e39-839b-44da8a1ddca3",
+      "name": "If: Execution ID Present?"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    email: $json['Contact Email'],\n    campaign_segment: $json['Campaign Segment'],\n    reason: 'Row is missing Execution ID - cannot be safely sent'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        2128
+      ],
+      "id": "8ab5c462-26ec-4b7d-9fb3-02fc3a015b4d",
+      "name": "Code: Prep - Missing Execution ID"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 513468778,
+          "mode": "list",
+          "cachedResultName": "Failed",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=513468778"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Suggested Status": "={{ $json.reason }}",
+            "Status": "Failed - Missing Execution ID",
+            "Contact Email": "={{ $json.email }}",
+            "Campaign Segment": "={{ $json.campaign_segment }}"
+          },
+          "matchingColumns": [
+            "Contact Email"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign Segment",
+              "displayName": "Campaign Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2384,
+        2128
+      ],
+      "id": "750a778a-c6f1-4bec-b9e5-46f9198f9e4c",
+      "name": "Google Sheets: Mark Failed (No Execution ID)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Idempotency Key",
+              "lookupValue": "={{ $json.idempotencyKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2768,
+        1840
+      ],
+      "id": "2baecf58-caa7-4a00-b21d-b60588ff6c4e",
+      "name": "Google Sheets: Check Duplicate Send",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "61b82334-cddc-4ac7-b93e-933620ee29c4",
+              "leftValue": "={{ $json.alreadySent }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3216,
+        1840
+      ],
+      "id": "0b9a4b89-eec2-4b4c-81d4-25db726d19c4",
+      "name": "If: Already Sent?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nconst alreadySent = rows.some(r => r['Status'] === 'Sent');\n\n// carry forward everything from the eligibility check so downstream nodes still have it\nconst eligibility = $('Code: Live Eligibility Check1').first().json;\n\nreturn [{\n  json: {\n    ...eligibility,\n    alreadySent,\n    duplicateReason: alreadySent\n      ? `Duplicate send blocked - a row with Idempotency Key \"${eligibility.idempotencyKey}\" is already marked Sent`\n      : ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2992,
+        1840
+      ],
+      "id": "99d7e531-4d76-48fb-be0c-fc05c8d12773",
+      "name": "Code: Evaluate Duplicate Send"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nreturn [{\n  json: {\n    email: d.email,\n    contactId: d.contactId,\n    campaignId: d.campaignId,\n    executionId: d.executionId,\n    reason: d.duplicateReason\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3440,
+        1616
+      ],
+      "id": "cd9e5a71-9b2a-4cc3-86f9-1f6e30735bd8",
+      "name": "Code: Prep - Duplicate Blocked"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Execution ID": "={{ $json.executionId }}",
+            "Status": "Blocked - Duplicate Send Prevented",
+            "Suggested Status": "={{ $json.reason }}"
+          },
+          "matchingColumns": [
+            "Execution ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Campaign Name",
+              "displayName": "Campaign Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Campaign ID",
+              "displayName": "Campaign ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "User Segment",
+              "displayName": "User Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Engagement Date",
+              "displayName": "Last Engagement Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Re-engagement Strategy",
+              "displayName": "Re-engagement Strategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Prompt/Content",
+              "displayName": "AI Prompt/Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Expected Uplift",
+              "displayName": "Expected Uplift",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Approver",
+              "displayName": "Approver",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Approval Date",
+              "displayName": "Approval Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Feedback/Comments",
+              "displayName": "Feedback/Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3648,
+        1632
+      ],
+      "id": "33a810d4-680e-4b56-b138-59867393e20e",
+      "name": "Google Sheets: Mark Blocked (Duplicate)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg",
+          "mode": "list",
+          "cachedResultName": "Droplet Lab - AI Re-engagement Operations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Review Board",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1MXfD1ttmAhQxg3X27AZxEG1R20oVXph92MaWMLsOBRg/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Failed",
+            "Suggested Status": "={{ $json.reason }}",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "Execution ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign Name",
+              "displayName": "Campaign Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Campaign ID",
+              "displayName": "Campaign ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User Segment",
+              "displayName": "User Segment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Engagement Date",
+              "displayName": "Last Engagement Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Re-engagement Strategy",
+              "displayName": "Re-engagement Strategy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Prompt/Content",
+              "displayName": "AI Prompt/Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Expected Uplift",
+              "displayName": "Expected Uplift",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Status",
+              "displayName": "Suggested Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approver",
+              "displayName": "Approver",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Approval Date",
+              "displayName": "Approval Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback/Comments",
+              "displayName": "Feedback/Comments",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "68da0b49-3f2d-4e58-9faf-268e88bc9b43",
+      "name": "Google Sheets: Mark Failed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4320,
+        2096
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "If the contact is no longer eligible by the time a human approves the draft, nothing is sent - the row is marked blocked with the reason instead."
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Code: Evaluate Duplicate Send').first().json;\nreturn [{\n  json: {\n    email: d.email,\n    contactId: d.contactId,\n    campaignId: d.campaignId,\n    executionId: d.executionId,\n    reason: 'Encharge tagging request failed'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        2000
+      ],
+      "id": "09f1bada-6ac4-49ff-b91f-d1dadf0c7e4d",
+      "name": "Code: Prep - Encharge Failed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst valid = items.filter(i => i.json && i.json.id);\nreturn [{ json: { message_count: valid.length, message_ids: valid.map(i => i.json.id) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4976,
+        1280
+      ],
+      "id": "8d80832f-6866-48bd-806c-0f054173fe4e",
+      "name": "Code: Count Thread Messages1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "412c3281-1c5c-441d-8d2a-3808b8b236a7",
+              "leftValue": "={{ $json.message_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5200,
+        1280
+      ],
+      "id": "95d3e54e-d0f5-4023-9723-36cd6e095fac",
+      "name": "If: Has Thread Messages?1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Code: Eligibility Gate1').first().json;\nconst threadContent = '(no prior Gmail thread history found for this contact)';\n\nreturn [{ json: { ...c, email: c.email, threadContent, context_mode: 'fresh' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5424,
+        1376
+      ],
+      "id": "6013cccf-ff60-4b86-a226-25b4ed97016d",
+      "name": "Code: No Thread History1"
+    }
+  ],
+  "pinData": {
+    "Webhook: Start Re-engagement1": [
+      {
+        "json": {
+          "headers": {
+            "host": "dropletlab.app.n8n.cloud",
+            "user-agent": "HubSpot Connect 2.0 (http://dev.hubspot.com/) (namespace: webhooks-nio-http-client) - WebhooksExecutorDaemon-executor",
+            "content-length": "312",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "54.174.62.175",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a2a52816eb312d0e-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "x-forwarded-for": "54.174.62.175, 172.71.222.227",
+            "x-forwarded-host": "dropletlab.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-swc-17-7b8c95767-mjlkk",
+            "x-hubspot-request-timestamp": "1786597231074",
+            "x-hubspot-signature": "76cfa4e89263ecdcd4e3262c6bb80046e4bddf2252872791e953a67cb311ab96",
+            "x-hubspot-signature-v3": "+mFmkMyOPH3iQ/B2+bXBFK3ArPRGWpgTsOIZRxPzasU=",
+            "x-hubspot-signature-version": "v1",
+            "x-hubspot-timeout-millis": "10000",
+            "x-is-trusted": "yes",
+            "x-real-ip": "54.174.62.175"
+          },
+          "params": {},
+          "query": {},
+          "body": [
+            {
+              "eventId": 3779989167,
+              "subscriptionId": 6956919,
+              "portalId": 6138076,
+              "appId": 44619726,
+              "occurredAt": 1786597230380,
+              "subscriptionType": "contact.propertyChange",
+              "attemptNumber": 0,
+              "objectId": 238297738127,
+              "propertyName": "trigger_re_engagement",
+              "propertyValue": "true",
+              "changeSource": "CRM_UI",
+              "sourceId": "userId:8406456"
+            }
+          ],
+          "webhookUrl": "https://dropletlab.app.n8n.cloud/webhook/trigger-reengagement",
+          "executionMode": "production"
+        },
+        "binary": {
+          "data": {
+            "data": "W3siZXZlbnRJZCI6Mzc3OTk4OTE2Nywic3Vic2NyaXB0aW9uSWQiOjY5NTY5MTksInBvcnRhbElkIjo2MTM4MDc2LCJhcHBJZCI6NDQ2MTk3MjYsIm9jY3VycmVkQXQiOjE3ODY1OTcyMzAzODAsInN1YnNjcmlwdGlvblR5cGUiOiJjb250YWN0LnByb3BlcnR5Q2hhbmdlIiwiYXR0ZW1wdE51bWJlciI6MCwib2JqZWN0SWQiOjIzODI5NzczODEyNywicHJvcGVydHlOYW1lIjoidHJpZ2dlcl9yZV9lbmdhZ2VtZW50IiwicHJvcGVydHlWYWx1ZSI6InRydWUiLCJjaGFuZ2VTb3VyY2UiOiJDUk1fVUkiLCJzb3VyY2VJZCI6InVzZXJJZDo4NDA2NDU2In1d",
+            "mimeType": "application/json"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "If: Needs Context Update?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Update AI Context1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HubSpot: Create Note (v3)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Update nurture_status": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Mark Sent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Start Re-engagement1": {
+      "main": [
+        [
+          {
+            "node": "Code: Validate HubSpot Signature1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Validate HubSpot Signature1": {
+      "main": [
+        [
+          {
+            "node": "If: Signature Valid?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Signature Valid?1": {
+      "main": [
+        [
+          {
+            "node": "Code: Split HubSpot Events1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Op: Invalid Signature1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Split HubSpot Events1": {
+      "main": [
+        [
+          {
+            "node": "If: Has Events To Process1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Has Events To Process1": {
+      "main": [
+        [
+          {
+            "node": "Config: Load Constants1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Op: No Valid Events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config: Load Constants1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Get Contact by ID1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Get Contact by ID1": {
+      "main": [
+        [
+          {
+            "node": "If: Contact Fetch Succeeded?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Contact Fetch Succeeded?1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Cooldown History",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prep Skip - Contact Deleted1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep Skip - Contact Deleted1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Push to Skipped Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Evaluate Cooldown1": {
+      "main": [
+        [
+          {
+            "node": "If: In Cooldown?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: In Cooldown?1": {
+      "main": [
+        [
+          {
+            "node": "Code: Prep Skip - Cooldown1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Eligibility Gate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep Skip - Cooldown1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Push to Skipped Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Eligibility Gate1": {
+      "main": [
+        [
+          {
+            "node": "If: Eligible?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Eligible?1": {
+      "main": [
+        [
+          {
+            "node": "If: Has Existing AI Context?1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prep Skip - Ineligible1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep Skip - Ineligible1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Push to Skipped Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Has Existing AI Context?1": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Search New Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail: Fetch Thread History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Search New Messages1": {
+      "main": [
+        [
+          {
+            "node": "Code: Count New Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Count New Messages1": {
+      "main": [
+        [
+          {
+            "node": "If: New Messages Found?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: New Messages Found?1": {
+      "main": [
+        [
+          {
+            "node": "Code: Expand Message IDs1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Use Existing Context Only1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Expand Message IDs1": {
+      "main": [
+        [
+          {
+            "node": "Get a message (New Only)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message (New Only)1": {
+      "main": [
+        [
+          {
+            "node": "Code: Trim New Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Trim New Messages1": {
+      "main": [
+        [
+          {
+            "node": "Code: Merge Context (Update Mode)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Merge Context (Update Mode)1": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Segment Prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Use Existing Context Only1": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Segment Prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Fetch Thread History": {
+      "main": [
+        [
+          {
+            "node": "Code: Count Thread Messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message1": {
+      "main": [
+        [
+          {
+            "node": "Code: Trim Thread Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Trim Thread Context1": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Segment Prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Build Segment Prompt1": {
+      "main": [
+        [
+          {
+            "node": "Advanced AI: Claude Reasoning1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced AI: Claude Reasoning1": {
+      "main": [
+        [
+          {
+            "node": "Code: Parse AI Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Parse AI Output1": {
+      "main": [
+        [
+          {
+            "node": "If: Parse Succeeded?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Parse Succeeded?1": {
+      "main": [
+        [
+          {
+            "node": "If: Needs Context Update?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prep Skip - Parse Failed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep Skip - Parse Failed1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Push to Skipped Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Update AI Context1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Create Note (v3)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Create Note (v3)1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Associate Note to Contact (v4)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Associate Note to Contact (v4)1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Push to Review Board1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Push to Review Board1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Reset Trigger Flag1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Push to Skipped Log1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Reset Trigger Flag1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Trigger: Watch Review Board1": {
+      "main": [
+        [
+          {
+            "node": "If: Status Approved?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Status Approved?1": {
+      "main": [
+        [
+          {
+            "node": "If: Execution ID Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Get Contact (Live - Approval Check)1": {
+      "main": [
+        [
+          {
+            "node": "Code: Live Eligibility Check1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Live Eligibility Check1": {
+      "main": [
+        [
+          {
+            "node": "If: Still Eligible?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Still Eligible?1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Duplicate Send",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Mark Blocked1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Tagging (Approved)1": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Update nurture_status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prep - Encharge Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Build Error Signature1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Lookup Alert Log1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Lookup Alert Log1": {
+      "main": [
+        [
+          {
+            "node": "Code: Compute Alert Decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Compute Alert Decision1": {
+      "main": [
+        [
+          {
+            "node": "If: Should Send Alert?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Should Send Alert?1": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Error Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Error Alert1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Error Signature1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Check Cooldown History": {
+      "main": [
+        [
+          {
+            "node": "Code: Evaluate Cooldown1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Execution ID Present?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Get Contact (Live - Approval Check)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prep - Missing Execution ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep - Missing Execution ID": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Mark Failed (No Execution ID)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Check Duplicate Send": {
+      "main": [
+        [
+          {
+            "node": "Code: Evaluate Duplicate Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Already Sent?": {
+      "main": [
+        [
+          {
+            "node": "Code: Prep - Duplicate Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request: Encharge Tagging (Approved)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Evaluate Duplicate Send": {
+      "main": [
+        [
+          {
+            "node": "If: Already Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep - Duplicate Blocked": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Mark Blocked (Duplicate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prep - Encharge Failed": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Count Thread Messages1": {
+      "main": [
+        [
+          {
+            "node": "If: Has Thread Messages?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Has Thread Messages?1": {
+      "main": [
+        [
+          {
+            "node": "Get a message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: No Thread History1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: No Thread History1": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Segment Prompt1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9dad1abf-b728-4aa9-8538-2c8206e867e0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e751229583485ca5c77b52556ec4fb2019695e29b68385a876d23c40e7d61a6"
+  },
+  "nodeGroups": [],
+  "id": "N1bi75KR8XrUzovm",
+  "tags": []
+}

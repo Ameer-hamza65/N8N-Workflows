@@ -1,0 +1,2548 @@
+{
+  "name": "Milestone 3 - B2: Demo Attended Trigger (Entry + Exit)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot-deal-stage-change",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "cc4473db-b71c-4e4c-911a-212ee1c4151f",
+      "name": "Webhook: HubSpot Deal Stage Change",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -4608,
+        768
+      ],
+      "webhookId": "aa0b019d-a4f4-4f45-9013-1ecca913e5d2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Code: Stage Configuration').first().json;\nconst ENTRY_STAGE_IDS = config.entryStageIds;\nconst EXIT_STAGE_IDS = config.exitStageIds;\nconst IRRELEVANT_STAGE_IDS = config.knownIrrelevantStageIds;\n\nfunction classify(stageId) {\n  if (ENTRY_STAGE_IDS.includes(stageId)) return 'entry';\n  if (EXIT_STAGE_IDS.includes(stageId)) return 'exit';\n  if (IRRELEVANT_STAGE_IDS.includes(stageId)) return 'irrelevant';\n  return 'unrecognized';\n}\n\nconst events = $input.first().json.body;\nif (!Array.isArray(events)) {\n  return [{ json: { skip: true, reason: \"Unexpected payload shape\" } }];\n}\n\nreturn events\n  .filter(e => e.propertyName === 'dealstage')\n  .map(e => ({\n    json: { dealId: e.objectId, newStageId: e.propertyValue, classification: classify(e.propertyValue) }\n  }))\n  .filter(e => e.json.classification !== 'irrelevant');"
+      },
+      "id": "17db9d22-bad8-4d09-ae33-2dc23c1939f4",
+      "name": "Code: Classify Stage Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2992,
+        736
+      ],
+      "jsCode": "const events = $input.first().json.body;\nif (!Array.isArray(events)) {\n  return [{ json: { skip: true, reason: \"Unexpected payload shape\" } }];\n}\n\n// Stage IDs come from \"Code: Stage Configuration\" - single source of truth (see that node).\nconst ENTRY_STAGE_IDS = $input.first().json.entryStageIds;\nconst EXIT_STAGE_IDS = $input.first().json.exitStageIds;\n\nfunction classify(stageId) {\n  if (ENTRY_STAGE_IDS.includes(stageId)) return 'entry';\n  if (EXIT_STAGE_IDS.includes(stageId)) return 'exit';\n  return 'irrelevant';\n}\n\nreturn events\n  .filter(e => e.propertyName === 'dealstage')\n  .map(e => ({\n    json: {\n      dealId: e.objectId,\n      newStageId: e.propertyValue,\n      classification: classify(e.propertyValue),\n      hubspotEventId: e.eventId,\n      attemptNumber: e.attemptNumber\n    }\n  }))\n  .filter(e => e.json.classification !== 'irrelevant');",
+      "notes": "Exported the classify() logic as a function so it can be reused later to re-classify against freshly-fetched data (see Code: Re-Extract Contact IDs)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0003",
+              "leftValue": "={{ $json.dealId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c7dc550c-4329-4d87-8ea0-0b086726b8f3",
+      "name": "If: Has Relevant Events?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2656,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hubapi.com/crm/v4/objects/deals/{{ $json.dealId }}?associations=contacts&properties=dealstage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotOAuth2Api",
+        "options": {}
+      },
+      "id": "75ddbb85-1871-4967-8329-e048d8798e47",
+      "name": "HTTP Request: Get Deal With Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2432,
+        736
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Code: Stage Configuration').first().json;\nconst ENTRY_STAGE_IDS = config.entryStageIds;\nconst EXIT_STAGE_IDS = config.exitStageIds;\nconst IRRELEVANT_STAGE_IDS = config.knownIrrelevantStageIds;\n\nconst deal = $input.first().json;\nconst assocContainer = deal.associations?.contacts;\nconst associations = assocContainer?.results ?? assocContainer?.items ?? [];\nconst contactIds = associations.map(a => a.id || a.toObjectId);\n\nconst currentStageId = deal.properties.dealstage;\nlet currentClassification = 'unrecognized';\nif (ENTRY_STAGE_IDS.includes(currentStageId)) currentClassification = 'entry';\nelse if (EXIT_STAGE_IDS.includes(currentStageId)) currentClassification = 'exit';\nelse if (IRRELEVANT_STAGE_IDS.includes(currentStageId)) currentClassification = 'irrelevant';\n\nreturn {\n  dealId: deal.id,\n  contactIds,\n  hasContacts: contactIds.length > 0,\n  classification: currentClassification,\n  newStageId: currentStageId,\n  webhookClaimedClassification: $('Code: Classify Stage Event').first().json.classification\n};"
+      },
+      "id": "e62ab34e-91dc-4c2a-8190-8a779baf7015",
+      "name": "Code: Extract Contact IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2208,
+        736
+      ],
+      "jsCode": "const deal = $input.first().json;\n\n// FIX 1: check both possible association response shapes - HubSpot's v4 associations\n// have used both 'results' and 'items' across different endpoint versions.\nconst assocContainer = deal.associations?.contacts;\nconst associations = assocContainer?.results ?? assocContainer?.items ?? [];\nconst contactIds = associations.map(a => a.id || a.toObjectId);\n\n// FIX 2 (bug found independently, same class as B1's stale-persona issue):\n// Re-classify using the CURRENT, freshly-fetched dealstage, not the original webhook's\n// claimed stage. If two stage changes land close together and this event was processed\n// after a newer one already landed, trusting the old webhook payload could apply a\n// stale entry/exit decision. Re-deriving from deal.properties.dealstage fixes this.\n// Stage IDs now come from the centralized \"Code: Stage Configuration\" node.\nconst config = $('Code: Stage Configuration').first().json;\nconst ENTRY_STAGE_IDS = config.entryStageIds;\nconst EXIT_STAGE_IDS = config.exitStageIds;\nconst currentStageId = deal.properties.dealstage;\nlet currentClassification = 'irrelevant';\nif (ENTRY_STAGE_IDS.includes(currentStageId)) currentClassification = 'entry';\nelse if (EXIT_STAGE_IDS.includes(currentStageId)) currentClassification = 'exit';\n\nreturn {\n  dealId: deal.id,\n  contactIds,\n  hasContacts: contactIds.length > 0,\n  classification: currentClassification,\n  newStageId: currentStageId,\n  webhookClaimedClassification: $('Code: Classify Stage Event').first().json.classification\n};",
+      "notes": "Now re-classifies from the freshly-fetched current stage instead of trusting the original webhook payload."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0005b",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "irrelevant",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "24e434a1-e21d-4b68-b30e-448a092d8517",
+      "name": "If: Still Relevant After Re-Check?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1984,
+        736
+      ],
+      "notes": "NEW: guards against the case where re-classification against current data finds the stage no longer matters (e.g. it moved again before we got here)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0006",
+              "leftValue": "={{ $json.hasContacts }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0702af06-7559-453d-8488-1b8dc7d8e57c",
+      "name": "If: Deal Has Associated Contacts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1760,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1094129100,
+          "mode": "list",
+          "cachedResultName": "Skipped (No Contacts)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=1094129100"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Deal ID": "={{ $('Code: Classify Stage Event').item.json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Stage ID": "={{ $('Code: Classify Stage Event').item.json.newStageId }}",
+            "Status": "Skipped",
+            "Skip Reason": "No Associated Contacts",
+            "Last Applied Classification": "={{ $('Code: Extract Contact IDs').first().json.classification }}",
+            "Retry Count": "0",
+            "Applied At": "={{ $now.toISO() }}",
+            "Idempotency Key": "=0:{{ $json.dealId }}:{{ $json.classification }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Applied At",
+              "displayName": "Applied At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a8f76c5b-f2b3-4fb2-9643-9a55f92689ed",
+      "name": "Google Sheets: Log Skipped (No Contacts)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1584,
+        848
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Now records an explicit Skip Reason and the HubSpot Event ID."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/batch/read",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"inputs\": {{ JSON.stringify($json.contactIds.map(id => ({ id }))) }},\n  \"properties\": [\"email\", \"hs_persona\", \"hs_email_optout\"]\n}",
+        "options": {}
+      },
+      "id": "a82f214a-bf6f-4e61-be28-48f568caabbd",
+      "name": "HTTP Request: Batch Read Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1168,
+        656
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Code: Extract Contact IDs').first().json;\nconst contacts = $input.first().json.contacts || [];\nreturn contacts.map(c => {\n    const contactId = c.id;\n    const classification = original.classification;\n    const idempotencyKey = contactId + ':' + original.dealId + ':' + classification;\n    \n    // Grab the email and test if it's a valid string\n    const email = (c.properties && c.properties.email) || null;\n    const emailLooksValid = typeof email === 'string' && /^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/.test(email);\n    \n    return { \n        json: { \n            ...original, \n            contactId: contactId,\n            email: email,\n            emailLooksValid: emailLooksValid,\n            isSuppressed: c.properties && (c.properties.hs_email_optout === true || c.properties.hs_email_optout === 'true'),\n            'Idempotency Key': idempotencyKey \n        } \n    };\n});"
+      },
+      "id": "d3e6029b-be16-4157-8462-adba88d6f3a6",
+      "name": "Code: Prepare Per-Contact Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        656
+      ],
+      "notes": "Added email format validation per contact. Fan-out node - one item per associated contact from here on."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Trigger Log (Success)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Idempotency Key",
+              "lookupValue": "={{ $json['Idempotency Key'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a4ebcae-7ec7-42fb-8f40-4f88ff0753f4",
+      "name": "Google Sheets: Check Trigger Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        176,
+        656
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "NOTE: this lookup is now by composite Idempotency Key (Google Sheets filters can't easily do a two-column AND lookup in this node version) - the actual composite-key idempotency check now happens in the next Code node, which additionally checks Deal ID from the fetched row before deciding alreadyApplied."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const logRow = $input.item.json;\nconst current = $('Code: Prepare Per-Contact Items').item.json;\nreturn { json: { ...current, alreadyApplied: !!logRow['Idempotency Key'] } };"
+      },
+      "id": "ea1d573b-6042-4ce6-88ac-1123a719cbb2",
+      "name": "Code: Check Idempotency",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        656
+      ],
+      "notes": "BUG FIX: added explicit mode: runOnceForEachItem. Without this, .item below would not resolve correctly (or would error) once more than one contact is in the batch - this was a real, confirmed bug, not just a style issue."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0010b",
+              "leftValue": "={{ $json.emailLooksValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "258efdf8-25ca-44ab-821e-159c4a50edea",
+      "name": "If: Email Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        656
+      ],
+      "notes": "NEW: guards against calling Encharge with a null/malformed email."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0011",
+              "leftValue": "={{ $json.alreadyApplied }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "691241e3-3a85-4ae5-ab1d-a3d67b4efbbf",
+      "name": "If: Not Already Applied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0012",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "entry",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d8beaf2a-65f2-4e45-a83e-1035fb4226fa",
+      "name": "If: Entry or Exit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.email }}\",\n  \"tag\": \"demo_sequence_active\"\n}",
+        "options": {}
+      },
+      "id": "7d43aa74-1a04-46bd-9ee9-25cb0adbe0c5",
+      "name": "HTTP Request: Encharge Add Demo Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1632,
+        336
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "VERIFY (still unresolved, flagged by both reviews): confirm this endpoint/method shape against your live Encharge API key's docs before trusting it, and confirm whether a 200 response can still carry a logical failure (e.g. success:false) that this workflow currently wouldn't catch. | HARDENING: added node-level retryOnFail (3 tries, 30s apart) so transient errors (429/5xx) self-heal before falling through to the sheet-based failure counter/alert. STILL VERIFY the endpoint/response shape against your live Encharge API key as noted above."
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.email }}\",\n  \"tag\": \"demo_sequence_active\"\n}",
+        "options": {}
+      },
+      "id": "c96d6eea-5178-48bb-baad-1c6ed50678a5",
+      "name": "HTTP Request: Encharge Remove Demo Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1632,
+        640
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 30000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "HARDENING: added node-level retryOnFail (3 tries, 30s apart) for the same reason as the Add Tag call."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Trigger Log (Success)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Prepare Per-Contact Items').item.json.email }}",
+            "Contact ID": "={{ $('Code: Prepare Per-Contact Items').item.json.contactId }}",
+            "Deal ID": "={{ $('Code: Prepare Per-Contact Items').item.json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Stage ID": "={{ $('Code: Prepare Per-Contact Items').item.json.newStageId }}",
+            "Status": "Success",
+            "Last Applied Classification": "={{ $('Code: Prepare Per-Contact Items').item.json.classification }}",
+            "Idempotency Key": "={{ $json['Idempotency Key'] }}",
+            "Timestamp": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "Idempotency Key"
+          ],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9291e19b-53ff-495e-9767-ed88f11bf3fe",
+      "name": "Google Sheets: Log Success",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2224,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "BUG FIX: changed 'update' to 'appendOrUpdate' (first-ever execution for a contact had no row to match, so nothing was ever logged). Matching columns now include Deal ID, matching the new composite idempotency key. | Now also logs Contact ID and HubSpot Event ID, and clears Last Error/HTTP Status so the sheet never shows stale failure info next to a Success row."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const original = $input.item.json;\nconst current = original.newRetryCount \n  ?? parseInt(($('Google Sheets: Check Trigger Log').item.json['Retry Count']) || 0, 10);\nconst statusCode = original.error?.httpCode || original.statusCode || 'unknown';\n\nreturn {\n  json: {\n    ...original,\n    newRetryCount: current + 1,\n    httpStatus: statusCode,\n    errorMessage: `[HTTP ${statusCode}] ` + (original.error?.message || JSON.stringify(original).slice(0, 300))\n  }\n};"
+      },
+      "id": "b99f3bcc-2b60-4703-9bef-bd3e212e5f6a",
+      "name": "Code: Increment Retry Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        816
+      ],
+      "notes": "BUG FIX: added mode: runOnceForEachItem, same root cause as Code: Check Idempotency."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1883912160,
+          "mode": "list",
+          "cachedResultName": "Failures",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=1883912160"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Prepare Per-Contact Items').item.json.email }}",
+            "Contact ID": "={{ $('Code: Prepare Per-Contact Items').item.json.contactId }}",
+            "Deal ID": "={{ $('Code: Prepare Per-Contact Items').item.json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Status": "Failed",
+            "Retry Count": "={{ $json.newRetryCount }}",
+            "Applied At": "={{ $now.toISO() }}",
+            "Last Applied Classification": "={{ $('Code: Classify Stage Event').item.json.classification }}",
+            "Stage ID": "={{ $('Code: Classify Stage Event').item.json.newStageId }}",
+            "Last Error": "={{ $json.errorMessage }}",
+            "HTTP Status": "={{ $json.httpStatus }}",
+            "Idempotency Key": "={{ $json['Idempotency Key'] }}"
+          },
+          "matchingColumns": [
+            "Idempotency Key"
+          ],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Applied At",
+              "displayName": "Applied At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cc3cc614-10df-4ee0-a520-7e899afd4dc6",
+      "name": "Google Sheets: Log Failure",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2576,
+        816
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Same appendOrUpdate fix as Log Success. | Now also logs Contact ID, HubSpot Event ID, and the actual Last Error/HTTP Status - previously only the Gmail alert had this, the sheet itself was not independently useful for troubleshooting."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-cond-0018",
+              "leftValue": "={{ $json.newRetryCount }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "260fa015-6f6b-4836-a142-27a70c3bf8f1",
+      "name": "If: Retry Exceeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2800,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Demo trigger tag operation failed",
+        "message": "={{ 'Demo sequence tag operation (' + $json.classification + ') for ' + $json.email + ' (Deal ' + $json.dealId + ') has failed ' + $json.newRetryCount + ' times.\\n\\nHTTP Status: ' + $json.httpStatus + '\\nLast error: ' + $json.errorMessage + '\\n\\nExecution: ' + $execution.url }}",
+        "options": {}
+      },
+      "id": "a09ecf73-c03b-45a6-9174-00679ab07ab2",
+      "name": "Gmail: Failure Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3024,
+        816
+      ],
+      "webhookId": "da973809-55f8-4e1d-b35f-da04d032fe44",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "507ec418-94cf-4cd2-8655-4d6cfd99ae2c",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4656,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Demo attended workflow failed",
+        "message": "={{ 'The Demo Attended Trigger workflow hit an unhandled error:\\n\\n' + $json.execution.error.message + '\\n\\nView execution here: ' + $json.execution.url }}",
+        "options": {}
+      },
+      "id": "5ffce563-b5f9-4265-97d6-5256268eccfc",
+      "name": "Gmail: Workflow Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -4432,
+        1312
+      ],
+      "webhookId": "96d9590b-b189-43a0-bff2-2fba00c0e701",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5061ce6c-0f60-4d2d-84e5-e1af794d5deb",
+              "leftValue": "={{ $json.data.includes('Created') }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "add-success-check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEqual",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1856,
+        256
+      ],
+      "id": "a14c840c-d562-4a56-b09b-0179475e5c62",
+      "name": "If: Add Tag Confirmed Created?",
+      "notes": "Checks the Encharge ADD response body for data === 'Created'. The REMOVE call's success path does not have an equivalent body check - it relies on onError=continueErrorOutput already separating true HTTP failures from the success branch. VERIFY both response contracts against your live Encharge API key before go-live (see sticky note)."
+    },
+    {
+      "parameters": {
+        "content": "**Deal Stage Trigger & Event Classification**\nThis workflow begins whenever a HubSpot deal changes stage.\n\nThe incoming webhook is inspected to determine whether the deal has entered or exited one of the predefined Demo Attended stages used by the sales process.\n\nOnly relevant stage transitions continue through the workflow, while unrelated deal updates are ignored to reduce unnecessary processing and API calls.",
+        "height": 560,
+        "width": 1632
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3040,
+        544
+      ],
+      "typeVersion": 1,
+      "id": "a8d492d5-ae6d-4115-a458-28071072b36d",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "**Contact Retrieval & Workflow Preparation**\n\nRetrieve the latest deal information directly from HubSpot, including all contacts associated with the deal.\n\nBefore continuing, the workflow verifies that the deal is still in the expected stage to avoid processing outdated webhook events caused by rapid stage changes.\n\nEach associated contact is then prepared as an individual workflow item so every contact can be processed independently. If no contacts are linked to the deal, the workflow records the event in the audit log and exits gracefully.",
+        "height": 656,
+        "width": 1392
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1296,
+        320
+      ],
+      "typeVersion": 1,
+      "id": "c0d45599-4654-41fc-bbca-319a7084e8ec",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**Duplicate Prevention & Data Validation**\n\nBefore making any marketing changes, the workflow checks the execution history stored in Google Sheets.\n\nEach contact and deal combination is compared against previous executions to determine whether the same Entry or Exit action has already been completed.\n\nThis prevents duplicate tag updates, repeated marketing actions, and unnecessary API requests if HubSpot sends the same webhook multiple times. Contacts with invalid email addresses are also excluded to prevent downstream failures.",
+        "height": 560,
+        "width": 1216
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        128,
+        368
+      ],
+      "typeVersion": 1,
+      "id": "35bb261e-cbe9-4e0e-b37a-7fb0f7afbdeb",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "**Marketing Automation Synchronization**\n\nDepending on the current deal status, the workflow synchronizes the contact with Encharge.\n\nWhen a deal enters the Demo Attended stage, the required marketing tag is added to enroll the contact into the appropriate nurture sequence.\n\nWhen a deal exits the Demo Attended stage, the same tag is removed to ensure marketing automation always reflects the current sales pipeline status.",
+        "height": 864,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1376,
+        64
+      ],
+      "typeVersion": 1,
+      "id": "7882826a-0594-4216-b55c-1fc6620d5fbf",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "**Execution Audit Trail**\n\nEvery successful marketing update is recorded in the Google Sheets audit log.\n\nThe log stores the contact, deal, processed stage, execution timestamp, and applied classification, providing a complete history of workflow activity for troubleshooting, reporting, and future duplicate prevention.",
+        "height": 464,
+        "width": 448
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2064,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "a5099dba-ec88-4db9-8335-f587dbba7aba",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "**Failure Tracking & Operational Alerts**\n\nIf an Encharge request fails, the workflow records the failure, increases the retry counter, and updates the execution log.\n\nWhen repeated failures exceed the configured threshold, an automatic email notification is sent to the team with the contact, deal, error details, and execution link so issues can be investigated quickly.",
+        "height": 560,
+        "width": 1136
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2256,
+        576
+      ],
+      "typeVersion": 1,
+      "id": "605e0025-654f-4821-b3f1-cd3646686170",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CENTRALIZED CONFIG: update stage IDs here ONLY.\nconst ENTRY_STAGE_IDS = ['1121282222', '1121282223', '1121282224', 'qualifiedtobuy', 'decisionmakerboughtin', '1122869089'];\nconst EXIT_STAGE_IDS = ['1118455408', '1118455409', 'contractsent', 'closedlost'];\nconst KNOWN_IRRELEVANT_STAGE_IDS = ['1118455404', '1121625098', '1118455407', '1122869087', 'appointmentscheduled', '1122869088'];\n\nreturn $input.all().map(item => ({\n  json: {\n    ...item.json,\n    entryStageIds: ENTRY_STAGE_IDS,\n    exitStageIds: EXIT_STAGE_IDS,\n    knownIrrelevantStageIds: KNOWN_IRRELEVANT_STAGE_IDS\n  }\n}));"
+      },
+      "id": "1ff1860f-b6f2-4bc8-8e86-463450afbc03",
+      "name": "Code: Stage Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3424,
+        736
+      ],
+      "notes": "NEW: single source of truth for ENTRY_STAGE_IDS / EXIT_STAGE_IDS, referenced by both 'Code: Classify Stage Event' (directly) and 'Code: Extract Contact IDs' (via node reference, since it runs later in the chain). Update stage IDs here only."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Explicit stateful counter that survives the retry loop\nlet currentRetryCount = 0;\ntry {\n  const previousRuns = $('Code: Check Batch Completeness').all();\n  if (previousRuns && previousRuns.length > 0) {\n    currentRetryCount = previousRuns.length;\n  }\n} catch(e) {}\n\nconst reqCount = $('Code: Extract Contact IDs').first().json.contactIds.length;\nconst results = $('HTTP Request: Batch Read Contacts').first().json.results || [];\nconst retCount = results.length;\nconst foundIds = results.map(r => parseInt(r.id));\nconst missing = $('Code: Extract Contact IDs').first().json.contactIds.filter(id => !foundIds.includes(parseInt(id)));\n\nreturn {\n    json: {\n        dealId: $('Code: Extract Contact IDs').first().json.dealId,\n        requestedCount: reqCount,\n        returnedCount: retCount,\n        missingContactIds: missing,\n        incomplete: missing.length > 0,\n        batchRetryCount: currentRetryCount,\n        contacts: results\n    }\n};"
+      },
+      "id": "bed2cbff-2881-4be9-8506-1920ba215c4d",
+      "name": "Code: Check Batch Completeness",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        592
+      ],
+      "notes": "NEW: runs in parallel off the same batch-read response (does not block the main fan-out). Detects when HubSpot returns fewer contacts than requested so a silently-dropped contact gets flagged instead of just disappearing from processing."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-batch-incomplete-cond",
+              "leftValue": "={{ $json.incomplete }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cba1c21f-667d-4f9b-a6b0-10d2d735b54e",
+      "name": "If: Batch Read Incomplete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -720,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "HubSpot batch contact read returned fewer contacts than requested",
+        "message": "=[PARTIAL PROCESSING] ={{ 'Deal ' + $json.dealId + ': requested ' + $json.requestedCount + ' contact(s) but HubSpot returned ' + $json.returnedCount + '.\\n\\nMissing Contact IDs: ' + $json.missingContactIds.join(', ') + '\\n\\nThose contacts were silently skipped this run - they will not be tagged in Encharge until the deal changes stage again. Execution: ' + $execution.url }}",
+        "options": {}
+      },
+      "id": "3c8ad949-0d80-4357-8d55-9e07569e27b5",
+      "name": "Gmail: Partial Batch Read Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        736
+      ],
+      "webhookId": "90371451-5461-4221-b167-52bec236e960",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "NEW: alerts when the batch/read didn't return every requested contact, so a silently-dropped contact gets noticed."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 19675620,
+          "mode": "list",
+          "cachedResultName": "Skipped (Duplicates & Invalid Email)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=19675620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $json.email }}",
+            "Contact ID": "={{ $json.contactId }}",
+            "Deal ID": "={{ $json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Last Applied Classification": "={{ $json.classification }}",
+            "Stage ID": "={{ $json.newStageId }}",
+            "Status": "Skipped",
+            "Skip Reason": "Invalid/Missing Email",
+            "Applied At": "={{ $now.toISO() }}",
+            "Retry Count": 0,
+            "Idempotency Key": "={{ $json['Idempotency Key'] }}"
+          },
+          "matchingColumns": [
+            "Idempotency Key"
+          ],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Applied At",
+              "displayName": "Applied At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c08fef79-5dc2-4269-9f7f-366026865524",
+      "name": "Google Sheets: Log Skipped (Invalid Email)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        848,
+        752
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "NEW: the false branch of 'If: Email Valid?' previously had no connection at all - contacts with a missing/malformed email silently vanished with zero audit trail. Now logged."
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst input = $input.first().json;\nconst headers = input.headers || {};\n// Ensures the body string is exactly what HubSpot signed, avoiding \"[object Object]\"\nconst rawBody = input.rawBody || JSON.stringify(input.body);\n\nconst signature = headers['x-hubspot-signature-v3'];\nconst timestamp = headers['x-hubspot-request-timestamp'];\n\n// Your specific Client Secret for B2\nconst clientSecret = '476cf9f4-55c6-4042-952d-fecaabfe15de';\n\nlet valid = false;\nlet reason = '';\n\nif (!clientSecret) {\n  reason = 'HUBSPOT_CLIENT_SECRET is not configured';\n} else if (!signature || !timestamp) {\n  reason = 'Missing signature or timestamp header';\n} else if (Math.abs(Date.now() - Number(timestamp)) > 5 * 60 * 1000) {\n  reason = 'Timestamp too old - possible replay';\n} else {\n  const method = 'POST';\n  // Hardcoded exactly to B2's webhook path to prevent test-mode URL mismatches\n  const url = 'https://' + (headers['x-forwarded-host'] || headers.host) + '/webhook/hubspot-deal-stage-change';\n  \n  // Notice: The clientSecret is NO LONGER prepended to this string (which was the bug!)\n  const base = method + url + rawBody + timestamp;\n  \n  const expected = crypto.createHmac('sha256', clientSecret).update(base).digest('base64');\n  \n  if (signature.length === expected.length) {\n    valid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));\n  }\n  if (!valid) reason = 'Signature mismatch';\n}\n\nreturn [{ json: { ...input, signatureValid: valid, signatureFailureReason: reason } }];"
+      },
+      "id": "f3ff55a3-1ee0-4d96-8afe-d760228794fc",
+      "name": "Code: Verify HubSpot Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4384,
+        768
+      ],
+      "notes": "SECURITY (must fix before go-live): validates x-hubspot-signature-v3 so only genuine HubSpot requests can trigger tag changes. Requires: (1) 'Raw Body' enabled on the webhook node [already set], (2) HUBSPOT_CLIENT_SECRET environment variable configured in n8n, (3) testing the exact requestUri reconstruction against your real webhook URL."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2-sig-valid-cond",
+              "leftValue": "={{ $json.signatureValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ea9d9855-d0c2-454a-bb0f-a7cbfdc9dd52",
+      "name": "If: Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4160,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Rejected HubSpot webhook - invalid signature",
+        "message": "={{ 'A request to the deal-stage-change webhook failed signature verification and was NOT processed.\\n\\nReason: ' + $json.signatureFailureReason + '\\n\\nThis could mean a misconfigured HUBSPOT_CLIENT_SECRET, a genuine HubSpot request that failed verification (needs investigation), or a malicious/forged request. Execution: ' + $execution.url }}",
+        "options": {}
+      },
+      "id": "e9d9f39e-56ce-4278-a3b2-02583533abc7",
+      "name": "Gmail: Invalid Webhook Signature Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -3936,
+        864
+      ],
+      "webhookId": "f7a7bd31-c8df-4ecd-a0f5-cd55c3560a1d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "NEW: false branch of signature verification. Nothing downstream runs for an unverified request."
+    },
+    {
+      "parameters": {
+        "content": "**Webhook Signature Verification (NEW)**\n\nValidates HubSpot's x-hubspot-signature-v3 header (HMAC-SHA256 using the app's Client Secret) before any stage-change event is trusted. Requests older than 5 minutes or with a bad signature are rejected and alerted on, never processed.\n\nSETUP REQUIRED: set the HUBSPOT_CLIENT_SECRET environment variable in n8n, and confirm the reconstructed request URI matches exactly what HubSpot signs for your instance before relying on this in production.",
+        "height": 480,
+        "width": 1008
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4688,
+        560
+      ],
+      "typeVersion": 1,
+      "id": "fc98b0f1-bc9c-450b-9428-51bf44037cba",
+      "name": "Sticky Note: Signature Verification"
+    },
+    {
+      "parameters": {
+        "content": "**Centralized Stage Configuration (NEW)**\n\nENTRY_STAGE_IDS / EXIT_STAGE_IDS now live in exactly one place - this node - instead of being duplicated in two Code nodes. If the client adds, removes, or renumbers a pipeline stage, update it here only.",
+        "height": 320,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3600,
+        576
+      ],
+      "typeVersion": 1,
+      "id": "cfc4a89d-dacf-4902-ae26-2cf61b137e55",
+      "name": "Sticky Note: Stage Configuration"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "batch-retry-exceed",
+              "leftValue": "={{ $json.batchRetryCount }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fb98a560-d790-4997-9191-a03bcf63d32c",
+      "name": "If: Batch Retry Exceeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -496,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "remove-ok",
+              "leftValue": "={{ !$json.error && $json.success !== false }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6e32b2bc-3264-40c8-9342-66befed3fbe1",
+      "name": "If: Remove Tag OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1856,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6c34477f-2a82-434f-ac98-3e06dbf0156a",
+              "leftValue": "={{ $json.classification }}",
+              "rightValue": "unrecognized",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2864,
+        912
+      ],
+      "id": "307f8085-043b-4e81-93e9-55e75ca5dbc9",
+      "name": "If: Unrecognized Stage?"
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Unknown deal stage ID detected...",
+        "emailType": "text",
+        "message": "Unknown deal stage ID detected...",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2576,
+        944
+      ],
+      "id": "2c045947-7600-4134-8163-39947f73b975",
+      "name": "Gmail: Unrecognized Stage Alert",
+      "webhookId": "8c15ba62-9fba-4047-9fa3-bc02062b13e1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "wBt3ZzdONXD49ydw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f1b28355-c556-4187-8597-a931bf9964b3",
+              "leftValue": "={{ $json.isSuppressed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1104,
+        592
+      ],
+      "id": "36698b15-a1c9-49fc-af30-a276758024b4",
+      "name": "If: Is Suppressed?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 19675620,
+          "mode": "list",
+          "cachedResultName": "Skipped (Duplicates & Invalid Email)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=19675620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Prepare Per-Contact Items').item.json.email }}",
+            "Contact ID": "={{ $('Code: Prepare Per-Contact Items').item.json.contactId }}",
+            "Deal ID": "={{ $('Code: Prepare Per-Contact Items').item.json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Last Applied Classification": "={{ $('Code: Prepare Per-Contact Items').item.json.classification }}",
+            "Stage ID": "={{ $('Code: Prepare Per-Contact Items').item.json.newStageId }}",
+            "Status": "Skipped",
+            "Skip Reason": "Already Applied",
+            "Applied At": "={{ $now.toISO() }}",
+            "Retry Count": 0,
+            "Idempotency Key": "={{ $json['Idempotency Key'] }}"
+          },
+          "matchingColumns": [
+            "Idempotency Key"
+          ],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Applied At",
+              "displayName": "Applied At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5d023837-7591-49be-9a4c-d4622cc9b5a5",
+      "name": "Google Sheets: Log Skipped (Duplicate)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1136,
+        768
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "CRITICAL FIX: previously wrote 'Skipped - Already Applied' INTO the 'Last Applied Classification' column, corrupting the value the next execution's idempotency check reads. Now 'Last Applied Classification' always holds the true classification, and the skip reason lives in its own 'Skip Reason' column."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y",
+          "mode": "list",
+          "cachedResultName": "Demo Attended Trigger",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 19675620,
+          "mode": "list",
+          "cachedResultName": "Skipped (Duplicates & Invalid Email)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ATiPiztUnSKDs9OvtGMVBxbW_sXRRgXwIYC3eQeOC5Y/edit#gid=19675620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Prepare Per-Contact Items').item.json.email }}",
+            "Contact ID": "={{ $('Code: Prepare Per-Contact Items').item.json.contactId }}",
+            "Deal ID": "={{ $('Code: Prepare Per-Contact Items').item.json.dealId }}",
+            "HubSpot Event ID": "={{ $('Code: Classify Stage Event').item.json.hubspotEventId }}",
+            "Last Applied Classification": "={{ $('Code: Prepare Per-Contact Items').item.json.classification }}",
+            "Stage ID": "={{ $('Code: Prepare Per-Contact Items').item.json.newStageId }}",
+            "Status": "Suppressed",
+            "Skip Reason": "Suppressed",
+            "Applied At": "={{ $now.toISO() }}",
+            "Retry Count": 0,
+            "Idempotency Key": "={{ $json['Idempotency Key'] }}"
+          },
+          "matchingColumns": [
+            "Idempotency Key"
+          ],
+          "schema": [
+            {
+              "id": "Idempotency Key",
+              "displayName": "Idempotency Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Deal ID",
+              "displayName": "Deal ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Applied Classification",
+              "displayName": "Last Applied Classification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Stage ID",
+              "displayName": "Stage ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Applied At",
+              "displayName": "Applied At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1278a827-8ed0-4443-be1e-ed6ef0e8ac6f",
+      "name": "Google Sheets: Log Skipped (Duplicate)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1376,
+        752
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "CRITICAL FIX: previously wrote 'Skipped - Already Applied' INTO the 'Last Applied Classification' column, corrupting the value the next execution's idempotency check reads. Now 'Last Applied Classification' always holds the true classification, and the skip reason lives in its own 'Skip Reason' column."
+    }
+  ],
+  "pinData": {
+    "Error Trigger": [
+      {
+        "json": {
+          "execution": {
+            "id": "617",
+            "url": "https://dropletlab.app.n8n.cloud/workflow/UqhwbAyg2pNTr7Yh/executions/617",
+            "error": {
+              "level": "info",
+              "shouldReport": false,
+              "description": "TypeError",
+              "tags": {},
+              "lineNumber": 2,
+              "message": "Cannot read properties of undefined (reading 'length') [line 2]",
+              "stack": "TypeError: Cannot read properties of undefined (reading 'length')\n    at VmCodeWrapper (evalmachine.<anonymous>:2:35)\n    at evalmachine.<anonymous>:19:2\n    at Script.runInContext (node:vm:149:12)\n    at runInContext (node:vm:301:6)\n    at result (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:209:61)\n    at new Promise (<anonymous>)\n    at JsTaskRunner.runForAllItems (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:202:34)\n    at JsTaskRunner.executeTask (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:137:26)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Object.waitingForSettings (/opt/runners/task-runner-javascript/dist/task-runner.js:283:17)"
+            },
+            "lastNodeExecuted": "Code: Check Batch Completeness",
+            "mode": "webhook",
+            "executionContext": {
+              "version": 1,
+              "establishedAt": 1786438533497,
+              "source": "webhook",
+              "triggerNode": {
+                "name": "Webhook: HubSpot Deal Stage Change",
+                "type": "n8n-nodes-base.webhook"
+              },
+              "redaction": {
+                "version": 2,
+                "production": false,
+                "manual": false,
+                "source": "workflow"
+              }
+            }
+          },
+          "workflow": {
+            "id": "UqhwbAyg2pNTr7Yh",
+            "name": "Milestone 3 - B2: Demo Attended Trigger (Entry + Exit)"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Webhook: HubSpot Deal Stage Change": [
+      {
+        "json": {
+          "headers": {
+            "host": "dropletlab.app.n8n.cloud",
+            "user-agent": "HubSpot Connect 2.0 (http://dev.hubspot.com/) (namespace: webhooks-nio-http-client) - WebhooksExecutorDaemon-executor",
+            "content-length": "302",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "54.174.62.134",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "a29623a7c8881fe3-IAD",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "x-forwarded-for": "54.174.62.134, 172.71.222.227",
+            "x-forwarded-host": "dropletlab.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-swc-17-7b8c95767-72s5c",
+            "x-hubspot-request-timestamp": "1786439763053",
+            "x-hubspot-signature": "a4511d3dfc6a2f10e460601bc151bfab9aebc6d63bdbf2aed694e34b4a5f48bb",
+            "x-hubspot-signature-v3": "O1vBSxf5bFVkX7/5UkbQnjQICLVhM41QzdN7dI2naxw=",
+            "x-hubspot-signature-version": "v1",
+            "x-hubspot-timeout-millis": "10000",
+            "x-is-trusted": "yes",
+            "x-real-ip": "54.174.62.134"
+          },
+          "params": {},
+          "query": {},
+          "body": [
+            {
+              "eventId": 4035443176,
+              "subscriptionId": 7233355,
+              "portalId": 6138076,
+              "appId": 47351713,
+              "occurredAt": 1786439762448,
+              "subscriptionType": "deal.propertyChange",
+              "attemptNumber": 0,
+              "objectId": 63222337371,
+              "propertyName": "dealstage",
+              "propertyValue": "1118455408",
+              "changeSource": "CRM_UI",
+              "sourceId": "userId:8406456"
+            }
+          ],
+          "webhookUrl": "https://dropletlab.app.n8n.cloud/webhook/hubspot-deal-stage-change",
+          "executionMode": "production"
+        },
+        "binary": {
+          "data": {
+            "data": "W3siZXZlbnRJZCI6NDAzNTQ0MzE3Niwic3Vic2NyaXB0aW9uSWQiOjcyMzMzNTUsInBvcnRhbElkIjo2MTM4MDc2LCJhcHBJZCI6NDczNTE3MTMsIm9jY3VycmVkQXQiOjE3ODY0Mzk3NjI0NDgsInN1YnNjcmlwdGlvblR5cGUiOiJkZWFsLnByb3BlcnR5Q2hhbmdlIiwiYXR0ZW1wdE51bWJlciI6MCwib2JqZWN0SWQiOjYzMjIyMzM3MzcxLCJwcm9wZXJ0eU5hbWUiOiJkZWFsc3RhZ2UiLCJwcm9wZXJ0eVZhbHVlIjoiMTExODQ1NTQwOCIsImNoYW5nZVNvdXJjZSI6IkNSTV9VSSIsInNvdXJjZUlkIjoidXNlcklkOjg0MDY0NTYifV0=",
+            "mimeType": "application/json"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook: HubSpot Deal Stage Change": {
+      "main": [
+        [
+          {
+            "node": "Code: Verify HubSpot Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Classify Stage Event": {
+      "main": [
+        [
+          {
+            "node": "If: Unrecognized Stage?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Has Relevant Events?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Get Deal With Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Get Deal With Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code: Extract Contact IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Extract Contact IDs": {
+      "main": [
+        [
+          {
+            "node": "If: Still Relevant After Re-Check?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Still Relevant After Re-Check?": {
+      "main": [
+        [
+          {
+            "node": "If: Deal Has Associated Contacts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Deal Has Associated Contacts?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Batch Read Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Skipped (No Contacts)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Batch Read Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code: Check Batch Completeness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Prepare Per-Contact Items": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Trigger Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Check Trigger Log": {
+      "main": [
+        [
+          {
+            "node": "Code: Check Idempotency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Check Idempotency": {
+      "main": [
+        [
+          {
+            "node": "If: Email Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Email Valid?": {
+      "main": [
+        [
+          {
+            "node": "If: Not Already Applied?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Skipped (Invalid Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Not Already Applied?": {
+      "main": [
+        [
+          {
+            "node": "If: Is Suppressed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Skipped (Duplicate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Entry or Exit?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Encharge Add Demo Tag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request: Encharge Remove Demo Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Add Demo Tag": {
+      "main": [
+        [
+          {
+            "node": "If: Add Tag Confirmed Created?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Increment Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Remove Demo Tag": {
+      "main": [
+        [
+          {
+            "node": "If: Remove Tag OK?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Increment Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Increment Retry Count": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Log Failure": {
+      "main": [
+        [
+          {
+            "node": "If: Retry Exceeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Retry Exceeded?": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Workflow Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Verify HubSpot Signature": {
+      "main": [
+        [
+          {
+            "node": "If: Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Code: Stage Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail: Invalid Webhook Signature Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Stage Configuration": {
+      "main": [
+        [
+          {
+            "node": "Code: Classify Stage Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Check Batch Completeness": {
+      "main": [
+        [
+          {
+            "node": "If: Batch Read Incomplete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Batch Read Incomplete?": {
+      "main": [
+        [
+          {
+            "node": "If: Batch Retry Exceeded?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Prepare Per-Contact Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Add Tag Confirmed Created?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Batch Retry Exceeded?": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Partial Batch Read Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request: Batch Read Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Remove Tag OK?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Increment Retry Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Partial Batch Read Alert": {
+      "main": [
+        []
+      ]
+    },
+    "If: Unrecognized Stage?": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Unrecognized Stage Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If: Has Relevant Events?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Is Suppressed?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Skipped (Duplicate)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If: Entry or Exit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "5d4c6aa1-a06e-453e-9a58-ed6f218d6815",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e751229583485ca5c77b52556ec4fb2019695e29b68385a876d23c40e7d61a6"
+  },
+  "nodeGroups": [],
+  "id": "UqhwbAyg2pNTr7Yh",
+  "tags": []
+}

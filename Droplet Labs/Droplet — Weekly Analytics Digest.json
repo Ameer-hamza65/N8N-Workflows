@@ -1,0 +1,581 @@
+{
+  "name": "Droplet — Weekly Analytics Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "9e9ebff3-86b0-4f01-b456-11d071dd02f0",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "var d = $input.first().json;\n\nvar ga4 = d.ga4 || {};\nvar sc = d.searchConsole || {};\nvar enc = d.encharge || {};\nvar goji = d.gojiberry || {};\n\nfunction fmt(value, change) {\n  if (change && change !== 'N/A') {\n    return String(value) + ' (' + change + ' vs prev week)';\n  }\n  return String(value);\n}\n\nvar lines = [];\n\n// ── Header ───────────────────────────────────────────────────────────────────\n\nlines.push('CURRENT PERIOD: ' + (d.weekLabel || 'this week'));\nlines.push('PREVIOUS PERIOD: ' + (d.prevLabel || 'last week'));\n\n// ── GA4 ──────────────────────────────────────────────────────────────────────\n\nlines.push('\\n--- WEBSITE (GA4) ---');\n\nlines.push(\n  'Sessions: ' +\n  fmt(ga4.totalSessions || 'N/A', ga4.sessionsChange)\n);\n\nlines.push(\n  'Users: ' +\n  fmt(ga4.totalUsers || 'N/A', ga4.usersChange)\n);\n\nlines.push(\n  'Page Views: ' +\n  fmt(ga4.totalPageViews || 'N/A', ga4.pageViewsChange)\n);\n\nlines.push(\n  'Top Channels: ' +\n  (ga4.topChannels || 'N/A')\n);\n\nif (ga4.error) {\n  lines.push('NOTE: ' + ga4.error);\n}\n\n// ── Search Console ───────────────────────────────────────────────────────────\n\nlines.push('\\n--- SEARCH (Google Search Console) ---');\n\nlines.push(\n  'Clicks: ' +\n  fmt(sc.totalClicks || 'N/A', sc.clicksChange)\n);\n\nlines.push(\n  'Impressions: ' +\n  fmt(sc.totalImpressions || 'N/A', sc.impressionsChange)\n);\n\nlines.push(\n  'Average CTR: ' +\n  (sc.avgCTR || 'N/A')\n);\n\nlines.push(\n  'Average Position: ' +\n  (sc.avgPosition || 'N/A')\n);\n\nlines.push(\n  'Top Queries: ' +\n  (sc.topQueries || 'N/A')\n);\n\nif (sc.error) {\n  lines.push('NOTE: ' + sc.error);\n}\n\n// ── Encharge ─────────────────────────────────────────────────────────────────\n\nlines.push('\\n--- EMAIL (Encharge) ---');\n\nlines.push(\n  'Campaign: ' +\n  (enc.campaignName || 'N/A')\n);\n\nlines.push(\n  'Emails Sent: ' +\n  (enc.emailsSent || 'N/A')\n);\n\nlines.push(\n  'Open Rate: ' +\n  (enc.openRate || 'N/A')\n);\n\nlines.push(\n  'Click Rate: ' +\n  (enc.clickRate || 'N/A')\n);\n\nlines.push(\n  'Unsubscribes: ' +\n  (enc.unsubscribes || 0)\n);\n\nif (enc.error) {\n  lines.push('NOTE: ' + enc.error);\n}\n\n// ── Gojiberry ────────────────────────────────────────────────────────────────\n\nlines.push('\\n--- LINKEDIN OUTREACH (Gojiberry) ---');\n\nlines.push(\n  'New Leads Generated: ' +\n  (goji.totalLeadsGenerated || 0)\n);\n\nlines.push(\n  'Prospects Scanned: ' +\n  (goji.totalProspectsFound || 0)\n);\n\nif (goji.bestSource) {\n  lines.push(\n    'Best Performing Source: ' +\n    goji.bestSource.source +\n    ' (' +\n    goji.bestSource.leads +\n    ' leads)'\n  );\n}\n\nif (goji.sourceBreakdown) {\n  var breakdown = Object.entries(goji.sourceBreakdown)\n    .map(function(entry) {\n      return entry[0] + ': ' + entry[1];\n    })\n    .join(', ');\n\n  lines.push(\n    'Source Breakdown: ' +\n    breakdown\n  );\n}\n\nif (\n  goji.topKeywords &&\n  Array.isArray(goji.topKeywords) &&\n  goji.topKeywords.length\n) {\n  var keywordText = goji.topKeywords\n    .map(function(k) {\n      if (typeof k === 'string') {\n        return k;\n      }\n      return (\n        k.keyword +\n        ' (' +\n        k.leads +\n        ' leads)'\n      );\n    })\n    .join(', ');\n\n  lines.push(\n    'Top Keywords: ' +\n    keywordText\n  );\n}\n\nlines.push(\n  'Summary: ' +\n  (goji.summary || 'N/A')\n);\n\nif (goji.error) {\n  lines.push('NOTE: ' + goji.error);\n}\n\n// ── Claude Instructions ──────────────────────────────────────────────────────\n\nlines.push('\\n--- TASK ---');\n\nlines.push(\n  'Write a professional weekly executive analytics digest for Droplet Lab.'\n);\n\nlines.push(\n  'Use the week-over-week changes provided.'\n);\n\nlines.push(\n  'Be specific about percentage increases and decreases.'\n);\n\nlines.push(\n  'Identify wins, concerns, anomalies, and opportunities.'\n);\n\nlines.push(\n  'Highlight important website, search, email, and lead-generation trends.'\n);\n\nlines.push(\n  'For Gojiberry, discuss best-performing lead sources and top-performing keywords.'\n);\n\nlines.push(\n  'Explain likely business impact, not just raw numbers.'\n);\n\nlines.push(`\nKeep the tone professional, concise, and founder-friendly.\nQuantify business impact wherever possible.\nDo not merely restate metrics.\nExplain what the numbers likely mean for Droplet Lab's growth, lead generation, and demand generation efforts.\n`);\n\nlines.push(\n  'Structure the response with: Executive Summary, Wins, Concerns, Recommended Actions.'\n);\n\n// ── STRICT JSON FORMATTING ───────────────────────────────────────────────────\n\nlines.push('\\nCRITICAL: You MUST return your response ONLY as valid JSON. Do not include any markdown formatting or text outside the JSON object.');\nlines.push('Use this exact JSON structure:');\nlines.push('{');\nlines.push('  \"headline\": \"A catchy headline for the week\",');\nlines.push('  \"week_label\": \"The date range\",');\nlines.push('  \"ga4\": { \"summary\": \"Summary of GA4 data\", \"actions\": [\"Action 1\", \"Action 2\"] },');\nlines.push('  \"search_console\": { \"summary\": \"Summary of SC data\", \"actions\": [\"Action 1\"] },');\nlines.push('  \"email\": { \"summary\": \"Summary of Encharge data\", \"actions\": [\"Action 1\"] },');\nlines.push('  \"outreach\": { \"summary\": \"Summary of Gojiberry data\", \"actions\": [\"Action 1\"] },');\nlines.push('  \"top_priorities\": [\"Top priority 1\", \"Top priority 2\"]');\nlines.push('}');\n\nreturn [\n  {\n    json: {\n      userPrompt: lines.join('\\n'),\n      weekLabel: d.weekLabel\n    }\n  }\n];"
+      },
+      "id": "babf177f-e65f-4afa-91fb-2e2d59436ad1",
+      "name": "Build User Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Grab the incoming JSON payload\nvar data = $input.first().json;\n\n// 1. Safely extract the text (Prioritizing the LangChain string output)\nvar rawText = data.text || '';\nif (!rawText && typeof data.content === 'string') rawText = data.content;\nif (!rawText && Array.isArray(data.content) && data.content[0]) rawText = data.content[0].text;\nif (!rawText && data.output) rawText = data.output;\n\n// If n8n automatically parsed it, stringify it so we don't break the regex\nif (typeof rawText === 'object') {\n    rawText = JSON.stringify(rawText);\n}\n\nif (!rawText) throw new Error('Anthropic node returned empty content. Check node output.');\n\n// 2. Token usage (Handle LangChain's nested metadata locations)\nvar u = data.usage || data.tokenUsage || (data.response && data.response.usage) || (data.additional_kwargs && data.additional_kwargs.usage) || {};\nvar inputTok  = parseInt(u.input_tokens     || u.promptTokens     || u.prompt_tokens     || 0, 10);\nvar outputTok = parseInt(u.output_tokens    || u.completionTokens || u.completion_tokens || 0, 10);\nvar cacheRead = parseInt(u.cache_read_input_tokens || 0, 10);\n\n// claude-sonnet-4-6 pricing: $3/M input, $15/M output\nvar costRun   = ((inputTok * 3) + (outputTok * 15)) / 1000000;\nvar tokenLog  = 'Input: '+inputTok+' | Output: '+outputTok+\n                (cacheRead ? ' | Cache read: '+cacheRead : '')+\n                ' | Run cost: $'+costRun.toFixed(5)+\n                ' | Monthly est. (4 runs): $'+(costRun*4).toFixed(4);\n\n// 3. Parse Claude's JSON\nvar brief;\ntry {\n  var cleaned = rawText.trim().replace(/^```json\\s*/i,'').replace(/```\\s*$/,'').trim();\n  brief = JSON.parse(cleaned);\n} catch(e) {\n  return [{ json: {\n    parseError:   true,\n    tokenLog:     tokenLog,\n    emailSubject: '\\u26a0\\ufe0f Weekly Brief \\u2014 Parse Error (manual review needed)',\n    emailHtml:    '<p>Claude response could not be parsed as JSON.</p><pre>'+rawText+'</pre><hr><small>'+tokenLog+'</small>'\n  }}];\n}\n\n// 4. HTML helpers\nfunction toUl(arr) {\n  if (!arr||!arr.length) return '';\n  return '<ul style=\"margin:6px 0 0 0;padding-left:18px;\">'+\n    arr.map(function(a){return '<li style=\"color:#444;font-size:13px;margin-bottom:3px;\">'+a+'</li>';}).join('')+\n    '</ul>';\n}\nfunction section(emoji, title, s) {\n  s = s || {};\n  return '<div style=\"margin-bottom:18px;padding:14px 16px;background:#f9f9f9;'+\n    'border-left:3px solid #2d6a4f;border-radius:4px;\">'+\n    '<div style=\"font-weight:700;font-size:13px;margin-bottom:6px;color:#1a1a1a;letter-spacing:.3px;\">'+emoji+' '+title.toUpperCase()+'</div>'+\n    '<div style=\"font-size:13px;color:#333;line-height:1.65;\">'+(s.summary||'No data available.')+'</div>'+\n    toUl(s.actions)+'</div>';\n}\n\nvar today = new Date().toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});\n\nvar html = [\n  '<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head>',\n  '<body style=\"font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:28px 24px;color:#1a1a1a;background:#fff;\">',\n  // Header banner\n  '<div style=\"background:#1a3d2b;color:#fff;padding:18px 20px;border-radius:6px;margin-bottom:22px;\">',\n  '<div style=\"font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;\">Droplet Lab \\u2014 Weekly Performance Brief</div>',\n  '<div style=\"font-size:19px;font-weight:700;line-height:1.3;\">'+(brief.headline||'Weekly Summary')+'</div>',\n  '<div style=\"font-size:12px;opacity:.75;margin-top:6px;\">'+(brief.week_label||'')+' &bull; '+today+'</div>',\n  '</div>',\n  // Sections\n  section('\\ud83d\\udcca','Website Traffic (GA4)',     brief.ga4),\n  section('\\ud83d\\udd0d','Search Performance',         brief.search_console),\n  section('\\ud83d\\udce7','Email (Encharge)',           brief.email),\n  section('\\ud83e\\udd1d','LinkedIn Outreach (Gojiberry)',brief.outreach),\n  // Top priorities\n  '<div style=\"padding:14px 16px;background:#fffbeb;border-left:3px solid #d97706;border-radius:4px;margin-bottom:20px;\">',\n  '<div style=\"font-weight:700;font-size:13px;margin-bottom:8px;color:#1a1a1a;letter-spacing:.3px;\">\\ud83c\\udfaf TOP PRIORITIES THIS WEEK</div>',\n  toUl(brief.top_priorities),\n  '</div>',\n  // Token usage footer\n  '<div style=\"font-size:10px;color:#999;border-top:1px solid #ebebeb;padding-top:10px;margin-top:4px;\">',\n  '<strong style=\"color:#777;\">Token usage this run:</strong> '+tokenLog,\n  '</div>',\n  '</body></html>'\n].join('');\n\nreturn [{ json: {\n  emailSubject: '\\ud83d\\udcca Weekly Brief \\u2014 '+(brief.week_label||'This Week')+' | '+(brief.headline||'Droplet Lab'),\n  emailHtml:    html,\n  tokenLog:     tokenLog,\n  brief:        brief\n}}];"
+      },
+      "id": "11af9749-9234-4f42-80f5-b0535afe6fcc",
+      "name": "Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "26c2b684-36b7-4e5b-8158-2d181f7ea2d1",
+      "name": "Gmail — Send Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2816,
+        0
+      ],
+      "webhookId": "2d0e8051-622d-4378-ad46-d5e25e6190db",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "cea73750-cf03-4449-8e72-0fbebcc966c9",
+      "name": "⚠️ Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "=⚠️ AUTOMATION ALERT: Weekly Digest Failed — {{ $now.toFormat('EEE d MMM') }}",
+        "message": "=<h2 style='color:#c0392b;font-family:Arial,sans-serif;'>&#9888; Automation Alert</h2><p style='font-family:Arial,sans-serif;'>The <strong>Weekly Analytics Digest</strong> failed. Your Monday brief was <strong>not delivered</strong>. Nothing was published.</p><table style='font-family:Arial,sans-serif;border-collapse:collapse;width:100%;'><tr><td style='padding:8px;background:#f5f5f5;font-weight:bold;width:150px;'>Failed node</td><td style='padding:8px;'>{{ $json.execution.lastNodeExecuted }}</td></tr><tr><td style='padding:8px;background:#f5f5f5;font-weight:bold;'>Error</td><td style='padding:8px;'>{{ $json.execution.error.message }}</td></tr><tr><td style='padding:8px;background:#f5f5f5;font-weight:bold;'>Time</td><td style='padding:8px;'>{{ $now.toISO() }}</td></tr><tr><td style='padding:8px;background:#f5f5f5;font-weight:bold;'>Execution link</td><td style='padding:8px;'>{{ $json.execution.url || \"Log into n8n Cloud and check Executions tab\" }}</td></tr></table><br><p style='font-family:Arial,sans-serif;'><strong>To recover:</strong> Log into n8n Cloud &rarr; Workflows &rarr; \"Droplet &mdash; Weekly Analytics Digest\" &rarr; Executions &rarr; find the failed run &rarr; re-run from failed node.</p>",
+        "options": {}
+      },
+      "id": "b6551d5d-36f6-4315-b002-5175192d5c54",
+      "name": "Gmail — Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        224,
+        224
+      ],
+      "webhookId": "06ac28a2-c25e-48b1-994e-147bc613f549",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getPageInsights",
+        "siteUrl": "sc-domain:dropletlab.com",
+        "dateRangeMode": "custom",
+        "startDate": "={{ $now.minus({days:7}).toFormat('yyyy-MM-dd') }}",
+        "endDate": "={{ $now.minus({days:1}).toFormat('yyyy-MM-dd') }}",
+        "rowLimit": 10,
+        "dimensions": [
+          "query"
+        ],
+        "filters": {
+          "filter": []
+        }
+      },
+      "type": "n8n-nodes-google-search-console.googleSearchConsole",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "be22410c-2e48-4810-b8e7-a38d940f6969",
+      "name": "Search Console — Last 7 Days",
+      "executeOnce": true,
+      "credentials": {
+        "googleSearchConsoleOAuth2Api": {
+          "id": "Op5vg5yhJO9Hxh2s",
+          "name": "Google Search Console account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getPageInsights",
+        "siteUrl": "sc-domain:dropletlab.com",
+        "dateRangeMode": "custom",
+        "startDate": "={{ $now.minus({days:14}).toFormat('yyyy-MM-dd') }}",
+        "endDate": "={{ $now.minus({days:8}).toFormat('yyyy-MM-dd') }}",
+        "rowLimit": 10,
+        "dimensions": [
+          "query"
+        ],
+        "filters": {
+          "filter": []
+        }
+      },
+      "type": "n8n-nodes-google-search-console.googleSearchConsole",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ],
+      "id": "1dee86b5-d388-4b66-9350-51005af127fd",
+      "name": "Search Console — Previous 7 Days",
+      "executeOnce": true,
+      "credentials": {
+        "googleSearchConsoleOAuth2Api": {
+          "id": "Op5vg5yhJO9Hxh2s",
+          "name": "Google Search Console account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "list",
+          "cachedResultName": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.userPrompt }}"
+            }
+          ]
+        },
+        "options": {
+          "system": "{   \"headline\": \"A short, impactful headline summarizing the week's performance\",   \"week_label\": \"Jun 18 – Jun 24, 2026\",   \"ga4\": {     \"summary\": \"Plain-text summary of website traffic performance, wins, and losses.\",     \"actions\": [\"Action item 1\", \"Action item 2\"]   },   \"search_console\": {     \"summary\": \"Plain-text summary of search performance, ranking changes, and click counts.\",     \"actions\": [\"Action item 1\", \"Action item 2\"]   },   \"email\": {     \"summary\": \"Summary of email campaigns and audience subscription changes.\",     \"actions\": [\"Action item 1\"]   },   \"outreach\": {     \"summary\": \"Summary of LinkedIn performance and net-new lead metrics.\",     \"actions\": [\"Action item 1\"]   },   \"top_priorities\": [     \"Top priority item 1\",     \"Top priority item 2\",     \"Top priority item 3\"   ] }",
+          "maxTokens": 4000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        0
+      ],
+      "id": "50cfd7da-c219-4dc1-a588-e645fcbbed0f",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "c1rT7akAeUCERCQV",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.encharge.io/v1/broadcasts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "3"
+            },
+            {
+              "name": "status",
+              "value": "sent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4f47241-e01f-4236-9fad-ff1209f6c94f",
+      "name": "Encharge — Recent Broadcasts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "value": "400498692",
+          "mode": "list",
+          "cachedResultName": "droplet lab",
+          "cachedResultUrl": "https://analytics.google.com/analytics/web/#/p400498692/"
+        },
+        "dateRange": "custom",
+        "startDate": "={{ $now.minus({days:7}).toFormat('yyyy-MM-dd') }}",
+        "endDate": "={{ $now.minus({days:1}).toFormat('yyyy-MM-dd') }}",
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "sessions"
+            },
+            {},
+            {
+              "listName": "screenPageViews"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {
+              "listName": "other",
+              "name": "sessionDefaultChannelGroup"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.googleAnalytics",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "1097a207-e236-4b2a-9216-b0522f1167b3",
+      "name": "GA4 — Last 7 Days",
+      "executeOnce": true,
+      "credentials": {
+        "googleAnalyticsOAuth2": {
+          "id": "6NxmArfvGjlaCVy1",
+          "name": "Google Analytics account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "value": "400498692",
+          "mode": "list",
+          "cachedResultName": "droplet lab",
+          "cachedResultUrl": "https://analytics.google.com/analytics/web/#/p400498692/"
+        },
+        "dateRange": "custom",
+        "startDate": "={{ $now.minus({days:14}).toFormat('yyyy-MM-dd') }}",
+        "endDate": "={{ $now.minus({days:8}).toFormat('yyyy-MM-dd') }}",
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "sessions"
+            },
+            {},
+            {
+              "listName": "screenPageViews"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {
+              "listName": "other",
+              "name": "sessionDefaultChannelGroup"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.googleAnalytics",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "ba75009c-79bd-493c-9e62-712494951d43",
+      "name": "GA4 — Previous 7 Days",
+      "executeOnce": true,
+      "credentials": {
+        "googleAnalyticsOAuth2": {
+          "id": "6NxmArfvGjlaCVy1",
+          "name": "Google Analytics account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://ext.gojiberry.ai/v1/agent/10103/logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "dateFrom",
+              "value": "={{ $now.minus({days:7}).toISO() }}"
+            },
+            {
+              "name": "dateTo",
+              "value": "={{$now.minus({days:1}).endOf('day').toISO()}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "48128f32-b92a-4168-b865-767410ca168e",
+      "name": "Gojiberry — Outreach Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "y0x5f2IVm87WC7dC",
+          "name": "Header Auth account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let leadsCreated = 0;\nlet prospectsFound = 0;\n\nconst sources = {};\nconst keywords = {};\n\nfor (const item of $input.all()) {\n\n  leadsCreated += item.json.leadsCreated || 0;\n  prospectsFound += item.json.totalLeads || 0;\n\n  const type = item.json.agentType || \"Unknown\";\n\n  // Source breakdown\n  sources[type] = (sources[type] || 0)\n    + (item.json.leadsCreated || 0);\n\n  // Keyword tracking\n  const keyword = item.json.agentKeyword;\n\n  if (keyword) {\n    keywords[keyword] =\n      (keywords[keyword] || 0)\n      + (item.json.leadsCreated || 0);\n  }\n}\n\n// Top 5 keywords as structured JSON\nconst topKeywords = Object.entries(keywords)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([keyword, leads]) => ({\n    keyword,\n    leads\n  }));\n\n// Best performing source\nconst bestSource = Object.entries(sources)\n  .sort((a, b) => b[1] - a[1])[0];\n\nreturn [{\n  json: {\n\n    total_leads_generated: leadsCreated,\n\n    total_prospects_found: prospectsFound,\n\n    source_breakdown: sources,\n\n    top_keywords: topKeywords,\n\n    best_source: bestSource\n      ? {\n          source: bestSource[0],\n          leads: bestSource[1]\n        }\n      : null,\n\n    gojiberry_summary:\n      `Generated ${leadsCreated} new leads from ${prospectsFound} prospects scanned.`\n\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "c5b08e75-12d8-4d9d-a905-54abd00b8c8c",
+      "name": "Gojiberry — Parse Leads"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Helpers ──────────────────────────────────────────────────────────────────\nfunction calcChange(curr, prev) {\n  curr = parseFloat(curr) || 0;\n  prev = parseFloat(prev) || 0;\n  if (prev === 0) return 'N/A';\n  var pct = ((curr - prev) / prev * 100).toFixed(1);\n  return (parseFloat(pct) >= 0 ? '↑' : '↓') + Math.abs(parseFloat(pct)) + '%';\n}\n\nfunction aggregateGA4(nodeName) {\n  var items = $(nodeName).all();\n\n  var sessions = 0;\n  var users = 0;\n  var pageViews = 0;\n  var channels = {};\n\n  items.forEach(function(item) {\n    var d = item.json;\n\n    var s = parseInt(d.sessions || 0, 10);\n    var u = parseInt(d.totalUsers || d.activeUsers || 0, 10);\n    var p = parseInt(d.screenPageViews || d.pageViews || 0, 10);\n\n    var ch = d.sessionDefaultChannelGroup || 'Unknown';\n\n    sessions += s;\n    users += u;\n    pageViews += p;\n\n    channels[ch] = (channels[ch] || 0) + s;\n  });\n\n  var topCh = Object.entries(channels)\n    .sort(function(a, b) { return b[1] - a[1]; })\n    .slice(0, 3)\n    .map(function(e) {\n      return e[0] + ': ' + e[1] + ' sessions';\n    })\n    .join(', ');\n\n  return {\n    sessions: sessions,\n    users: users,\n    pageViews: pageViews,\n    topChannels: topCh\n  };\n}\n\nfunction aggregateSC(nodeName) {\n\n  var items = $(nodeName).all();\n  var rows = [];\n\n  if (items.length === 1 && items[0].json && items[0].json.rows) {\n    rows = items[0].json.rows;\n  } else {\n    rows = items.map(function(item) {\n      return item.json;\n    });\n  }\n\n  var clicks = 0;\n  var impressions = 0;\n  var ctrSum = 0;\n  var posSum = 0;\n\n  rows.forEach(function(row) {\n    clicks += row.clicks || 0;\n    impressions += row.impressions || 0;\n    ctrSum += row.ctr || 0;\n    posSum += row.position || 0;\n  });\n\n  return {\n    clicks: clicks,\n    impressions: impressions,\n    avgCTR: rows.length\n      ? (ctrSum / rows.length * 100).toFixed(1) + '%'\n      : 'N/A',\n    avgPos: rows.length\n      ? (posSum / rows.length).toFixed(1)\n      : 'N/A',\n    topQueries: rows\n      .sort(function(a, b) {\n        return b.clicks - a.clicks;\n      })\n      .slice(0, 5)\n      .map(function(r) {\n        return '\"' +\n          (r.keys ? r.keys[0] : (r.query || '?')) +\n          '\" (' + r.clicks + ' clicks)';\n      })\n      .join(', ')\n  };\n}\n\nvar ga4Data;\nvar searchData;\nvar enchargeData;\nvar gojiberryData;\n\n// ── GA4 ──────────────────────────────────────────────────────────────────────\ntry {\n\n  var g = aggregateGA4('GA4 — Last 7 Days');\n  var gp = aggregateGA4('GA4 — Previous 7 Days');\n\n  ga4Data = {\n    totalSessions: g.sessions,\n    totalUsers: g.users,\n    totalPageViews: g.pageViews,\n    topChannels: g.topChannels,\n    sessionsChange: calcChange(g.sessions, gp.sessions),\n    usersChange: calcChange(g.users, gp.users),\n    pageViewsChange: calcChange(g.pageViews, gp.pageViews)\n  };\n\n} catch(e) {\n\n  ga4Data = {\n    error: 'GA4 unavailable: ' + e.message\n  };\n\n}\n\n// ── Search Console ───────────────────────────────────────────────────────────\ntry {\n\n  var s = aggregateSC('Search Console — Last 7 Days');\n  var sp = aggregateSC('Search Console — Previous 7 Days');\n\n  searchData = {\n    totalClicks: s.clicks,\n    totalImpressions: s.impressions,\n    avgCTR: s.avgCTR,\n    avgPosition: s.avgPos,\n    topQueries: s.topQueries,\n    clicksChange: calcChange(s.clicks, sp.clicks),\n    impressionsChange: calcChange(s.impressions, sp.impressions)\n  };\n\n} catch(e) {\n\n  searchData = {\n    error: 'Search Console unavailable: ' + e.message\n  };\n\n}\n\n// ── Encharge ─────────────────────────────────────────────────────────────────\ntry {\n\n  var encItems = $('Encharge — Recent Broadcasts').all();\n\n  var b = encItems[0]\n    ? encItems[0].json\n    : {};\n\n  var latestBroadcast =\n    (b.broadcasts && b.broadcasts.length > 0)\n      ? b.broadcasts[0]\n      : {};\n\n  var stats = latestBroadcast.stats || {};\n\n  enchargeData = {\n    emailsSent: stats.sent || 'N/A',\n    openRate: stats.openRate\n      ? stats.openRate + '%'\n      : 'N/A',\n    clickRate: stats.clickRate\n      ? stats.clickRate + '%'\n      : 'N/A',\n    unsubscribes: stats.unsubscribes || 0,\n    campaignName:\n      latestBroadcast.name ||\n      latestBroadcast.subject ||\n      'No recent broadcasts'\n  };\n\n} catch(e) {\n\n  enchargeData = {\n    error: 'Encharge unavailable: ' + e.message\n  };\n\n}\n\n// ── Gojiberry ────────────────────────────────────────────────────────────────\ntry {\n\n  var g2 = $('Gojiberry — Parse Leads').first().json;\n\n  gojiberryData = {\n    totalLeadsGenerated: g2.total_leads_generated || 0,\n    totalProspectsFound: g2.total_prospects_found || 0,\n    sourceBreakdown: g2.source_breakdown || {},\n    topKeywords: g2.top_keywords || [],\n    bestSource: g2.best_source || null,\n    summary: g2.gojiberry_summary || 'N/A'\n  };\n\n} catch(e) {\n\n  gojiberryData = {\n    error: 'Gojiberry unavailable: ' + e.message\n  };\n\n}\n\nvar weekLabel =\n  $now.minus({days: 7}).toFormat('MMM d') +\n  ' – ' +\n  $now.minus({days: 1}).toFormat('MMM d, yyyy');\n\nvar prevLabel =\n  $now.minus({days: 14}).toFormat('MMM d') +\n  ' – ' +\n  $now.minus({days: 8}).toFormat('MMM d, yyyy');\n\nreturn [{\n  json: {\n    weekLabel: weekLabel,\n    prevLabel: prevLabel,\n    ga4: ga4Data,\n    searchConsole: searchData,\n    encharge: enchargeData,\n    gojiberry: gojiberryData,\n    collectedAt: $now.toISO()\n  }\n}];"
+      },
+      "id": "2cb7a4db-48c5-42c2-8120-e2c8063ef675",
+      "name": "Aggregate All Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**Automated Data Pulls:** Set up a scheduled n8n workflow that automatically extracts 7-day performance metrics from:\n**Google Analytics 4:** (Sessions, Users, Page Views)\n**Google Search Console** (Clicks, Impressions, CTR)\n**Encharge** (Email broadcast metrics)\n**Gojiberry** (LinkedIn outreach leads)\n**Claude Reasoning Engine:** Built a custom aggregation node that feeds the raw metrics and week-over-week comparisons securely into Claude (Anthropic) to generate a plain-language executive brief.\nSafe, Read-Only Delivery: Configured a secure delivery node that formats Claude's insights into a clean HTML email and sends it directly to your inbox. There is zero publishing risk.\nGlobal Error Alerting: Implemented a failsafe Error Trigger (originally slated for Phase 4) that will immediately email you with a direct link to the logs if the automation ever fails to run.",
+        "height": 672,
+        "width": 3200
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -176,
+        -256
+      ],
+      "typeVersion": 1,
+      "id": "1f4c197e-0ebc-478a-a1df-a9c806ab895a",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "GA4 — Last 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build User Prompt": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Send Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚠️ Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Console — Last 7 Days": {
+      "main": [
+        [
+          {
+            "node": "Search Console — Previous 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Console — Previous 7 Days": {
+      "main": [
+        [
+          {
+            "node": "Encharge — Recent Broadcasts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Format Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encharge — Recent Broadcasts": {
+      "main": [
+        [
+          {
+            "node": "Gojiberry — Outreach Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GA4 — Last 7 Days": {
+      "main": [
+        [
+          {
+            "node": "GA4 — Previous 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GA4 — Previous 7 Days": {
+      "main": [
+        [
+          {
+            "node": "Search Console — Last 7 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gojiberry — Outreach Metrics": {
+      "main": [
+        [
+          {
+            "node": "Gojiberry — Parse Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gojiberry — Parse Leads": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Data": {
+      "main": [
+        [
+          {
+            "node": "Build User Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e1067483-b6d5-4256-89cf-87fbdf0fb917",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e751229583485ca5c77b52556ec4fb2019695e29b68385a876d23c40e7d61a6"
+  },
+  "nodeGroups": [],
+  "id": "Aept2WINryXFbKJy",
+  "tags": []
+}

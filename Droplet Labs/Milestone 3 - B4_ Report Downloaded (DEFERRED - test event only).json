@@ -1,0 +1,729 @@
+{
+  "name": "Milestone 3 - B4: Report Downloaded (DEFERRED - test event only)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "report-download-test-event",
+        "options": {}
+      },
+      "id": "9230e085-a92c-4f68-985f-4cf811d9f577",
+      "name": "Webhook: Report Download (TEST STAND-IN)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1104,
+        192
+      ],
+      "webhookId": "a13c0b1f-3b87-4d44-8dbd-b2d1bdb4b29e",
+      "notes": "DEFERRED PER SCOPE DOC: this webhook is a manually-fired stand-in only. The real trigger source (gated form + its property/event schema) has not been supplied by the client yet. Expected test payload shape: { \"email\": \"test@example.com\" }. When the real source is supplied, replace this Webhook node's trigger only - everything downstream should not need to change, since it all operates on 'email' regardless of where it came from."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst email = body.email;\nreturn { email: email || null, valid: !!email };"
+      },
+      "id": "68cae590-6d56-4a41-9d71-82ec4ca95a1b",
+      "name": "Code: Validate Test Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b4-cond-0003",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "292a854f-1c98-44c1-ab6d-e654521c86ea",
+      "name": "If: Valid Payload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -656,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "search",
+        "filterGroupsUi": {
+          "filterGroupsValues": [
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "email|string",
+                    "value": "={{ $json.email }}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "properties": [
+            "firstname",
+            "lastname",
+            "email",
+            "hs_persona"
+          ]
+        }
+      },
+      "id": "46a97f1f-51a8-4436-97b8-f279ac0ddc93",
+      "name": "HubSpot: Find Contact (Read-Only)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        80
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "notes": "READ-ONLY per scope doc: 'HubSpot is system of record; no writes back to HubSpot.' This node never creates or updates a HubSpot contact - it only looks up persona if the contact already happens to exist there."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b4-cond-0005",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cd909093-e599-4c02-a08d-de9f5d3b7ecd",
+      "name": "If: Contact Found in HubSpot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        80
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return { \n  email: $('Code: Validate Test Payload').first().json.email, \n  persona: $json.properties?.hs_persona === 'persona_2' ? 'QC Manager' : ($json.properties?.hs_persona === 'persona_3' ? 'R&D' : 'Unknown'), \n  hubspotMatchStatus: 'Found' \n};"
+      },
+      "id": "fc2cfb3d-b12c-4bc2-b0cd-a1ae0694e79f",
+      "name": "Code: Extract Known Persona",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ \n  json: { \n    email: $('Code: Validate Test Payload').first().json.email, \n    persona: 'Unknown', \n    hubspotMatchStatus: 'Not found - not in HubSpot yet, and this workflow does not create contacts there' \n  } \n}];"
+      },
+      "id": "4969bb31-55b3-419a-aff1-e5e02f8e6c2a",
+      "name": "Code: Mark Unknown - No HubSpot Match",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1089838637,
+          "mode": "list",
+          "cachedResultName": "Report Download Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=1089838637"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Contact Email",
+              "lookupValue": "={{ $json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d06aae54-a004-45f8-9ca7-42b8796af01a",
+      "name": "Google Sheets: Check Idempotency",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const logRow = $input.first().json;\nconst current = $('Code: Extract Known Persona').item.json || $('Code: Mark Unknown - No HubSpot Match').item.json;\nreturn {\n  ...current,\n  alreadyProcessed: !!logRow['Contact Email']\n};"
+      },
+      "id": "c4fae01e-4f2e-46a7-86b5-9978ec5d4e5d",
+      "name": "Code: Merge and Check Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        80
+      ],
+      "notes": "Note: since two upstream branches (Found / Not Found) both feed here, n8n's expression $('node').item works because each is a single-branch path per execution - only one of the two source nodes will have actually run per item."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b4-cond-0010",
+              "leftValue": "={{ $json.alreadyProcessed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e729a370-32c1-4566-996d-e22f3e7b744e",
+      "name": "If: Not Already Processed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.encharge.io/v1/people",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.email }}\",\n  \"fields\": { \"persona\": \"{{ $json.persona }}\" },\n  \"tags\": [\"report_downloaded\"]\n}",
+        "options": {}
+      },
+      "id": "79556da6-5019-4e27-a4ed-b36cde96495d",
+      "name": "HTTP Request: Encharge Upsert Person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        976,
+        -32
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1089838637,
+          "mode": "list",
+          "cachedResultName": "Report Download Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=1089838637"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Merge and Check Log').item.json.email }}",
+            "Persona": "={{ $('Code: Merge and Check Log').item.json.persona }}",
+            "HubSpot Match Status": "={{ $('Code: Merge and Check Log').item.json.hubspotMatchStatus }}",
+            "Status": "=Synced",
+            "Processed At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Persona",
+              "displayName": "Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Match Status",
+              "displayName": "HubSpot Match Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Processed At",
+              "displayName": "Processed At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "92efd502-d7d4-4c9a-8804-0cf452a0ffcd",
+      "name": "Google Sheets: Log Success",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        -32
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Code: Merge and Check Log').item.json;\nreturn { ...original, errorMessage: $input.first().json.error?.message || JSON.stringify($input.first().json).slice(0, 300) };"
+      },
+      "id": "fa68d275-87df-4448-9a4a-bba1dade4776",
+      "name": "Code: Capture Error Detail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1089838637,
+          "mode": "list",
+          "cachedResultName": "Report Download Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=1089838637"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $json.email }}",
+            "Persona": "={{ $json.persona }}",
+            "HubSpot Match Status": "={{ $json.hubspotMatchStatus }}",
+            "Status": "Failed",
+            "Processed At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Persona",
+              "displayName": "Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Match Status",
+              "displayName": "HubSpot Match Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Processed At",
+              "displayName": "Processed At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3b3d5c51-07df-462e-bc3a-bbfdfd578d9a",
+      "name": "Google Sheets: Log Failure",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1328,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Report-download sync to Encharge failed",
+        "message": "={{ 'Report-download sync for ' + $json.email + ' failed.\\n\\nError: ' + $json.errorMessage + '\\n\\nCheck the Encharge credential and the Report Download Log sheet.' }}",
+        "options": {}
+      },
+      "id": "c338c5d8-8524-4205-a1d0-fa9714bc7293",
+      "name": "Gmail: Failure Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1552,
+        208
+      ],
+      "webhookId": "4f16f025-a655-49ea-a171-ac7844c48b50",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "30155c76-77d4-43ad-82c8-7bb1251dcc9b",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1104,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Report download workflow failed",
+        "message": "={{ 'The Report Downloaded (test) workflow hit an unhandled error:\\n\\n' + $json.execution.error.message + '\\n\\nView execution here: ' + $json.execution.url }}",
+        "options": {}
+      },
+      "id": "8335cfe3-920a-48cc-98d8-27c256c492d1",
+      "name": "Gmail: Workflow Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -880,
+        480
+      ],
+      "webhookId": "f05f29a9-a826-46df-960f-5c4b821ad5d6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: Report Download (TEST STAND-IN)": {
+      "main": [
+        [
+          {
+            "node": "Code: Validate Test Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Validate Test Payload": {
+      "main": [
+        [
+          {
+            "node": "If: Valid Payload?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Valid Payload?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Find Contact (Read-Only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Find Contact (Read-Only)": {
+      "main": [
+        [
+          {
+            "node": "If: Contact Found in HubSpot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Contact Found in HubSpot?": {
+      "main": [
+        [
+          {
+            "node": "Code: Extract Known Persona",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Mark Unknown - No HubSpot Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Extract Known Persona": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Idempotency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Mark Unknown - No HubSpot Match": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Idempotency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Check Idempotency": {
+      "main": [
+        [
+          {
+            "node": "Code: Merge and Check Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Merge and Check Log": {
+      "main": [
+        [
+          {
+            "node": "If: Not Already Processed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Not Already Processed?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Encharge Upsert Person",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Capture Error Detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Upsert Person": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Capture Error Detail": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Log Failure": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Workflow Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "27bd6217-c3c4-4f91-bcfc-dd62dd4df3f8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e751229583485ca5c77b52556ec4fb2019695e29b68385a876d23c40e7d61a6"
+  },
+  "nodeGroups": [],
+  "id": "A7zp9giCSCryd5Ji",
+  "tags": []
+}

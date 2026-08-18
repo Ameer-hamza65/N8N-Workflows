@@ -1,0 +1,2035 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const events = $input.first().json.body;\n\nif (!Array.isArray(events)) {\n  return [{ json: { skip: true, reason: \"Unexpected payload shape\" } }];\n}\n\nconst PERSONA_MAP = { 'persona_2': 'QC Manager', 'persona_3': 'R&D' };\n\nreturn events\n  .filter(e => e.propertyName === 'hs_persona')\n  .map(e => {\n    const label = PERSONA_MAP[e.propertyValue];\n    return {\n      json: {\n        objectId: e.objectId,\n        rawPersonaValue: e.propertyValue,\n        personaLabel: label || null,\n        recognized: !!label,\n        hubspotEventId: e.eventId,\n        attemptNumber: e.attemptNumber\n      }\n    };\n  });"
+      },
+      "id": "590a172e-9f09-47cf-a30b-8c6c3e2dedb4",
+      "name": "Code: Filter Persona Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3760,
+        1408
+      ],
+      "jsCode": "const events = $input.first().json.body;\n\nif (!Array.isArray(events)) {\n  return [{ json: { skip: true, reason: \"Unexpected payload shape\" } }];\n}\n\nconst PERSONA_MAP = { 'persona_2': 'QC Manager', 'persona_3': 'R&D' };\n\nreturn events\n  .filter(e => e.propertyName === 'hs_persona')\n  .map(e => {\n    const label = PERSONA_MAP[e.propertyValue];\n    return {\n      json: {\n        objectId: e.objectId,\n        rawPersonaValue: e.propertyValue,\n        personaLabel: label || null,\n        recognized: !!label,\n        hubspotEventId: e.eventId,\n        attemptNumber: e.attemptNumber\n      }\n    };\n  });"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1-cond-0003",
+              "leftValue": "={{ $json.recognized }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4463badc-527e-4c81-bb57-0a37fdea9791",
+      "name": "If: Recognized Persona Value?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3536,
+        1408
+      ],
+      "notes": "False branch means the property changed to a value outside persona_2/persona_3. Routes to an alert instead of silently guessing."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.objectId }}?properties=email,hs_persona,hs_email_optout",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotOAuth2Api",
+        "options": {}
+      },
+      "id": "23eef36d-510c-417c-837e-13dce7da48dc",
+      "name": "HTTP Request: Get Contact Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -2912,
+        1344
+      ],
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "KMCSN6UT3fgpYdJ5",
+          "name": "HubSpot account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "FIX: added onError so a deleted/missing contact (404) fails gracefully instead of crashing the whole workflow via the generic Error Trigger."
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Contact fetch failed - possibly deleted",
+        "message": "={{ 'Could not fetch contact ' + $('Code: Filter Persona Events').first().json.objectId + ' from HubSpot after a persona-change webhook fired.\\n\\nThis usually means the contact was deleted between the event firing and processing. Error: ' + ($json.error?.message || JSON.stringify($json).slice(0,300)) }}",
+        "options": {}
+      },
+      "id": "8392eeef-4bd7-42e8-90fa-8cea1759576b",
+      "name": "Gmail: Contact Fetch Failed Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -2288,
+        1648
+      ],
+      "webhookId": "442fec13-1b6d-44d7-af22-1c8eb72b5e74",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      },
+      "notes": "NEW: handles the error-output branch of the contact fetch, instead of letting it crash the whole execution.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "HubSpot Contact ID",
+              "lookupValue": "={{ $('Code: Filter Persona Events').first().json.objectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "78979e6b-8e7b-4089-8b61-b99842ac4090",
+      "name": "Google Sheets: Check Sync Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2688,
+        1344
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $('Code: Filter Persona Events').first().json;\nconst contact = $('HTTP Request: Get Contact Email').first().json;\nconst rows = $input.all();\n\nconst PERSONA_MAP = { 'persona_2': 'QC Manager', 'persona_3': 'R&D' };\n\nconst currentPersonaRaw = contact.properties.hs_persona;\nconst currentPersonaLabel = PERSONA_MAP[currentPersonaRaw] || null;\n\nlet previousPersona = null;\nif (rows.length) {\n    previousPersona = rows[0].json[\"Last Synced Persona\"] || null;\n}\n\nconst email = contact.properties.email;\nconst isSuppressed = contact.properties.hs_email_optout === true || contact.properties.hs_email_optout === 'true';\nconst emailLooksValid = typeof email === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n\nreturn [{\n    json: {\n        email,\n        emailLooksValid,\n        objectId: event.objectId,\n        hubspotContactId: event.objectId,\n        hubspotEventId: event.hubspotEventId,\n        attemptNumber: event.attemptNumber,\n        previousPersona,\n        newPersona: currentPersonaLabel,\n        webhookClaimedPersona: event.personaLabel,\n        isSuppressed,\n        needsSync: previousPersona !== currentPersonaLabel && !!currentPersonaLabel && emailLooksValid\n    }\n}];"
+      },
+      "id": "91359b55-0236-4f48-b71e-c187afdddcf4",
+      "name": "Code: Compare Against Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2464,
+        1344
+      ],
+      "notes": "FIXED: newPersona now comes from the fresh HubSpot fetch, not the webhook payload. Also added basic email format validation.",
+      "jsCode": "const event = $('Code: Filter Persona Events').first().json;\nconst contact = $('HTTP Request: Get Contact Email').first().json;\nconst rows = $input.all();\n\nconst PERSONA_MAP = { 'persona_2': 'QC Manager', 'persona_3': 'R&D' };\n\n// BUG FIX: use HubSpot's CURRENT persona value (freshly fetched just now), not the webhook\n// payload's claimed value. Webhooks can arrive out of order - if a newer change already\n// landed in HubSpot before this event finished processing, we must sync the current truth,\n// not the older value this specific event happened to carry.\nconst currentPersonaRaw = contact.properties.hs_persona;\nconst currentPersonaLabel = PERSONA_MAP[currentPersonaRaw] || null;\n\nlet previousPersona = null;\nif (rows.length) {\n    previousPersona = rows[0].json[\"Last Synced Persona\"] || null;\n}\n\nconst email = contact.properties.email;\nconst emailLooksValid = typeof email === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n\nreturn [{\n    json: {\n        email,\n        emailLooksValid,\n        objectId: event.objectId,\n        hubspotContactId: event.objectId,\n        hubspotEventId: event.hubspotEventId,\n        attemptNumber: event.attemptNumber,\n        previousPersona,\n        newPersona: currentPersonaLabel,\n        webhookClaimedPersona: event.personaLabel,\n        needsSync: previousPersona !== currentPersonaLabel && !!currentPersonaLabel && emailLooksValid\n    }\n}];"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1-cond-0007",
+              "leftValue": "={{ $json.needsSync }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "62398f6b-f83a-46c9-a2b8-7db11be0ba60",
+      "name": "If: Persona Actually Changed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2240,
+        1344
+      ],
+      "notes": "Idempotency gate. False = already synced this exact value, or email failed validation, or persona unmapped. Do nothing."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.encharge.io/v1/people",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $('Code: Compare Against Log').item.json.email }}\",\n  \"fields\": {\n      \"Persona\": \"{{ $('Code: Compare Against Log').item.json.newPersona }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "5a4695f3-0422-491d-bd80-226261d12f15",
+      "name": "HTTP Request: Encharge Upsert Person",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1824,
+        1360
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "notes": "FIX: removed the 'tags' array from this call - it was redundant with, and could conflict with, the dedicated tag remove/add steps that already run afterward. This call now only sets the custom field. | HARDENING: added onError=continueRegularOutput (previously missing, so a failed call would have crashed the execution instead of reaching 'If: Upsert Successful?'). Added node-level retryOnFail (3 tries, 30s apart) so transient errors self-heal before the sheet-based failure counter below even sees them.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 30000
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tag\": \"persona_qc_manager\",\n  \"email\": \"{{ $('Code: Compare Against Log').item.json.email }}\"\n}",
+        "options": {}
+      },
+      "id": "750cb912-9f3a-458b-9470-a300d0b8e48f",
+      "name": "HTTP Request: Remove QC Tag (unconditional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1168,
+        1120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "notes": "REPLACES 'If: Previous Persona Exists?' + conditional single removal. Per review: trusting the Sheet log to know which tag exists in Encharge is fragile if the log ever drifts from reality. Unconditionally attempting removal of BOTH possible tags is stateless and self-correcting - a tag-doesn't-exist response is expected and harmless (onError continues regardless). | HARDENING: onError=continueRegularOutput so a 'tag not found' response never halts the workflow (matches the stateless design intent), plus node-level retry for genuine transient network/API errors.",
+      "onError": "continueErrorOutput",
+      "retryOnFail": false,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tag\": \"persona_rd\",\n  \"email\": \"{{ $('Code: Compare Against Log').item.json.email }}\"\n}",
+        "options": {}
+      },
+      "id": "99fce22c-1884-4e8c-94d3-6c4b119afc33",
+      "name": "HTTP Request: Remove RD Tag (unconditional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -544,
+        1120
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": false,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "notes": " | HARDENING: onError=continueRegularOutput so a 'tag not found' response never halts the workflow (matches the stateless design intent), plus node-level retry for genuine transient network/API errors."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.encharge.io/v1/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"tag\": \"{{ $('Code: Compare Against Log').item.json.newPersona === 'QC Manager' ? 'persona_qc_manager' : 'persona_rd' }}\",\n  \"email\": \"{{ $('Code: Compare Against Log').item.json.email }}\"\n}",
+        "options": {}
+      },
+      "id": "04e02b88-7cd0-493a-9cb1-663b74378f8a",
+      "name": "HTTP Request: Encharge Add Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        8,
+        1088
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "la0GjDt2cSWW3M7U",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": false,
+      "maxTries": 3,
+      "waitBetweenTries": 30000,
+      "notes": "HARDENING: same onError + retry fix as the Upsert Person call above - this node also had no onError set, which would have crashed the run on failure instead of reaching 'If: Add Tag Successful?'."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Compare Against Log').item.json.email }}",
+            "HubSpot Contact ID": "={{ $('Code: Compare Against Log').item.json.hubspotContactId }}",
+            "HubSpot Event ID": "={{ $('Code: Compare Against Log').item.json.hubspotEventId }}",
+            "Previous Persona": "={{ $('Code: Compare Against Log').item.json.previousPersona }}",
+            "Target Persona": "={{ $('Code: Compare Against Log').item.json.newPersona }}",
+            "Last Synced Persona": "={{ $('Code: Compare Against Log').item.json.newPersona }}",
+            "Sync Status": "Success",
+            "Skip Reason": "",
+            "Last Synced At": "={{ $now.toISO() }}",
+            "Retry Count": "0",
+            "Last Error": "",
+            "HTTP Status": ""
+          },
+          "matchingColumns": [
+            "HubSpot Contact ID"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Previous Persona",
+              "displayName": "Previous Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Persona",
+              "displayName": "Target Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced Persona",
+              "displayName": "Last Synced Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sync Status",
+              "displayName": "Sync Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced At",
+              "displayName": "Last Synced At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "bd1f9cfb-432e-4d73-aa17-ab5a92cb7477",
+      "name": "Google Sheets: Upsert Sync Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        16,
+        1024
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Now logs Contact ID, HubSpot Event ID, Previous Persona and Target Persona alongside the result, and clears Last Error/HTTP Status/Skip Reason on success so the sheet always reflects current truth."
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $('Code: Compare Against Log').item.json.email }}",
+            "HubSpot Contact ID": "={{ $('Code: Compare Against Log').item.json.hubspotContactId }}",
+            "HubSpot Event ID": "={{ $('Code: Compare Against Log').item.json.hubspotEventId }}",
+            "Previous Persona": "={{ $('Code: Compare Against Log').item.json.previousPersona }}",
+            "Target Persona": "={{ $('Code: Compare Against Log').item.json.newPersona }}",
+            "Last Synced Persona": "={{ $('Code: Compare Against Log').item.json.previousPersona }}",
+            "Sync Status": "Failed",
+            "Skip Reason": "",
+            "Retry Count": "={{ $json.newRetryCount }}",
+            "Last Synced At": "={{ $now.toISO() }}",
+            "Last Error": "={{ $json.failReason || $json.error?.message }}",
+            "HTTP Status": "={{ $json.error?.httpCode }}"
+          },
+          "matchingColumns": [
+            "HubSpot Contact ID"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Previous Persona",
+              "displayName": "Previous Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Persona",
+              "displayName": "Target Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced Persona",
+              "displayName": "Last Synced Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sync Status",
+              "displayName": "Sync Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced At",
+              "displayName": "Last Synced At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d4a9967f-8cee-4e9b-bbc7-dc84bae1c6cd",
+      "name": "Google Sheets: Log Failure",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        272,
+        1488
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "CRITICAL FIX: 'Last Synced Persona' now stays at the last value that ACTUALLY synced successfully (previousPersona) instead of being overwritten with the target persona that just failed to sync - previously a failed sync could make the audit trail claim a persona was synced when it wasn't. The attempted target is now tracked separately in 'Target Persona'. Also added Last Error / HTTP Status / Contact ID / Event ID."
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Persona sync to Encharge failed - credential or API issue",
+        "message": "={{ 'Persona sync for ' + $json.email + ' (target: ' + $json.newPersona + ') has failed ' + $json.newRetryCount + ' times.\\n\\nHTTP Status: ' + $json.httpStatus + '\\nLast error: ' + $json.errorMessage + '\\n\\nExecution: ' + $execution.url + '\\n\\nNo partial write occurred - the contact was NOT tagged. Check the Encharge credential and the Persona Sync Log sheet.' }}",
+        "options": {}
+      },
+      "id": "29144a87-76f2-42eb-9db7-9740563c716b",
+      "name": "Gmail: Sync Failure Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        1488
+      ],
+      "webhookId": "962ed9bb-8710-45e4-828b-1ada437d30c4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      },
+      "notes": "Added execution URL and HTTP status for faster debugging.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Unrecognized persona value received",
+        "message": "={{ 'A Contact Property Changed event fired for hs_persona with a value that does not match persona_2 or persona_3: \\\"' + $json.rawPersonaValue + '\\\" (Contact ID: ' + $json.objectId + '). No sync was attempted. Check whether the persona property values have changed.' }}",
+        "options": {}
+      },
+      "id": "9198f875-31e0-4319-b0f3-d4aea34e8af6",
+      "name": "Gmail: Unrecognized Persona Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -3344,
+        1584
+      ],
+      "webhookId": "95da10ff-0d79-43e4-b1bd-1a8ed0816b8e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "996c55c2-7d67-4231-804a-cec901e7cecf",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4176,
+        2096
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Persona sync workflow failed",
+        "message": "={{ 'The Persona Sync workflow hit an unhandled error:\\n\\n' + $json.execution.error.message + '\\n\\nView execution here: ' + $json.execution.url }}",
+        "options": {}
+      },
+      "id": "b0b4ee4f-df6e-4d77-a92b-52aff665ca6f",
+      "name": "Gmail: Workflow Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -3936,
+        2096
+      ],
+      "webhookId": "099208a7-b084-44c3-9fc2-cfbcb83cd39c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot-persona-sync",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "25d6ac33-afb0-42fc-8a44-78315fc67363",
+      "name": "Webhook: HubSpot Persona Change",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -4192,
+        1408
+      ],
+      "webhookId": "1041a58a-e772-4ca7-9c99-116c3bf20bf7",
+      "notes": "Target of the Private App Webhook Subscription watching Contact Property Changed on hs_persona. Method: POST (this was the earlier bug - was set to GET)."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\":\"accepted\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3984,
+        1408
+      ],
+      "id": "1a2e2a33-1fc0-4cc1-bcb2-cee8f2659699",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "content": "**Webhook Trigger & Persona Validation**\nThis workflow is triggered whenever the HubSpot Contact Persona property changes.\n\nThe incoming webhook is acknowledged immediately, then the workflow filters for supported persona values (QC Manager and R&D). Any unexpected values are reported instead of being synchronized.",
+        "height": 592,
+        "width": 1168
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4240,
+        1184
+      ],
+      "typeVersion": 1,
+      "id": "0eed8716-0855-4a88-83e9-0d041fb036ac",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "**Contact Retrieval & Sync Decision**\nRetrieve the contact's current details directly from HubSpot and compare them with the last successfully synchronized persona stored in Google Sheets.\n\nThe workflow always trusts HubSpot as the source of truth and synchronizes only when the current persona differs from the last recorded value, preventing duplicate updates.",
+        "height": 704,
+        "width": 912
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2976,
+        1168
+      ],
+      "typeVersion": 1,
+      "id": "afa12437-dd94-46cb-abe3-0f43a16cd6bf",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**Update Encharge Contact**\nUpdate the contact record in Encharge by synchronizing the latest persona as a custom field.\n\nThis ensures Encharge stores the same persona currently assigned in HubSpot before any marketing tags are updated.",
+        "height": 496,
+        "width": 608
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1920,
+        1136
+      ],
+      "typeVersion": 1,
+      "id": "40c4bb70-6be4-4257-b985-db00aeeebd20",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "**Persona Tag Synchronization**\nKeep Encharge persona tags synchronized with HubSpot.\n\nThe workflow first removes all possible persona tags to eliminate stale data, then applies the correct tag based on the contact's current persona. This stateless approach automatically corrects inconsistencies.",
+        "height": 496,
+        "width": 1008
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1216,
+        928
+      ],
+      "typeVersion": 1,
+      "id": "120b66db-af18-4b40-aa0e-388cd1b3af01",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "**Audit Logging**\nRecord every successful synchronization in the Google Sheets audit log.\n\nThe log stores the latest synchronized persona, timestamp, retry count, and synchronization status, providing a complete audit trail and enabling future idempotency checks.",
+        "height": 400,
+        "width": 384
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -96,
+        800
+      ],
+      "typeVersion": 1,
+      "id": "1ea29b9d-ea34-4b6c-ab5c-824819547565",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "**Failure Tracking & Alerting**\nIf any Encharge synchronization step fails, increment the retry counter, log the failure, and monitor repeated failures.\n\nAfter multiple unsuccessful attempts, automatically notify the administrator with diagnostic information to allow rapid investigation.",
+        "height": 320,
+        "width": 1072
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -80,
+        1328
+      ],
+      "typeVersion": 1,
+      "id": "013d5c3b-7df6-48ce-9c61-1e02fc330ed9",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "**Workflow Error Monitoring**\nCapture any unexpected workflow failures that are not handled elsewhere.\n\nA notification containing the execution details is automatically emailed so unexpected issues can be investigated without affecting future webhook processing.",
+        "height": 384,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4304,
+        1920
+      ],
+      "typeVersion": 1,
+      "id": "1cff1481-9f82-47f2-be3b-e7683650fd8e",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $json.email }}",
+            "HubSpot Contact ID": "={{ $json.hubspotContactId }}",
+            "HubSpot Event ID": "={{ $json.hubspotEventId }}",
+            "Previous Persona": "={{ $json.previousPersona }}",
+            "Target Persona": "={{ $json.newPersona }}",
+            "Last Synced Persona": "={{ $json.previousPersona }}",
+            "Sync Status": "Skipped",
+            "Skip Reason": "={{ !$json.emailLooksValid ? 'Invalid/Missing Email' : (!$json.newPersona ? 'Unmapped Persona Value' : 'Already Synced - No Change') }}",
+            "Retry Count": "0",
+            "Last Synced At": "={{ $now.toISO() }}",
+            "Last Error": "",
+            "HTTP Status": ""
+          },
+          "matchingColumns": [
+            "HubSpot Contact ID"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Previous Persona",
+              "displayName": "Previous Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Persona",
+              "displayName": "Target Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced Persona",
+              "displayName": "Last Synced Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sync Status",
+              "displayName": "Sync Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced At",
+              "displayName": "Last Synced At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b1-new-skip-nochange-0001",
+      "name": "Google Sheets: Log Skipped (No Change Needed)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2240,
+        1568
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "NEW: the false branch of 'If: Persona Actually Changed?' previously dead-ended silently (no sync needed, invalid email, or unmapped persona). Now it's recorded for observability, without ever overwriting the last real synced value."
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst headers = $json.headers || {};\nconst rawBody = $json.body; // Raw Body is enabled on the webhook node, so this is the exact string HubSpot signed\nconst timestampHeader = headers['x-hubspot-request-timestamp'];\nconst signatureV3 = headers['x-hubspot-signature-v3'];\n\n// CONFIG: set HUBSPOT_CLIENT_SECRET as an n8n environment variable (Settings > Environment Variables)\n// using the Client Secret of the HubSpot Private App / Public App this webhook subscription belongs to.\nconst clientSecret = $env.HUBSPOT_CLIENT_SECRET || '';\n\nlet isValid = false;\nlet reason = '';\n\nif (!clientSecret) {\n  reason = 'HUBSPOT_CLIENT_SECRET environment variable is not configured';\n} else if (!signatureV3 || !timestampHeader) {\n  reason = 'Missing HubSpot signature or timestamp header';\n} else {\n  // Reject requests older than 5 minutes to prevent replay attacks\n  const ageMs = Date.now() - parseInt(timestampHeader, 10);\n  if (isNaN(ageMs) || ageMs > 5 * 60 * 1000 || ageMs < -60 * 1000) {\n    reason = 'Request timestamp outside the allowed window';\n  } else {\n    const method = 'POST';\n    // NOTE: this must exactly match the URL HubSpot calls (protocol + host + path).\n    // Double check this against your n8n instance's public webhook URL before relying on it.\n    let requestUri = $json.webhookUrl || '';\n    const sourceString = clientSecret + method + requestUri + rawBody + timestampHeader;\n    const expectedHash = crypto.createHmac('sha256', clientSecret).update(sourceString).digest('base64');\n    isValid = expectedHash === signatureV3;\n    if (!isValid) reason = 'Signature mismatch';\n  }\n}\n\nlet parsedBody;\ntry {\n  parsedBody = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;\n} catch (e) {\n  parsedBody = null;\n  if (isValid) { isValid = false; reason = 'Body was not valid JSON'; }\n}\n\nreturn [{\n  json: {\n    ...$json,\n    body: parsedBody,\n    signatureValid: isValid,\n    signatureFailureReason: reason\n  }\n}];"
+      },
+      "id": "b1-verify-sig-0001",
+      "name": "Code: Verify HubSpot Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3984,
+        1600
+      ],
+      "notes": "SECURITY (must fix before go-live): validates x-hubspot-signature-v3 so only genuine HubSpot requests can trigger persona syncs. Requires: (1) 'Raw Body' enabled on the webhook node [already set], (2) HUBSPOT_CLIENT_SECRET environment variable configured in n8n, (3) testing the exact requestUri reconstruction against your real webhook URL - HubSpot's v3 signature is sensitive to protocol/host/path exactness."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1-sig-valid-cond",
+              "leftValue": "={{ $json.signatureValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-if-sig-valid-0001",
+      "name": "If: Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3856,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "abhandankar@dropletlab.com",
+        "subject": "Rejected HubSpot webhook - invalid signature",
+        "message": "={{ 'A request to the persona-sync webhook failed signature verification and was NOT processed.\\n\\nReason: ' + $json.signatureFailureReason + '\\n\\nThis could mean a misconfigured HUBSPOT_CLIENT_SECRET, a genuine HubSpot request that failed verification (needs investigation), or a malicious/forged request. Execution: ' + $execution.url }}",
+        "options": {}
+      },
+      "id": "b1-gmail-invalid-sig-0001",
+      "name": "Gmail: Invalid Webhook Signature Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -3856,
+        1808
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p6vzY2TE6YW2hBS1",
+          "name": "Gmail OAuth2 API"
+        }
+      },
+      "notes": "NEW: false branch of signature verification. Nothing downstream runs for an unverified request.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "**Webhook Signature Verification (NEW)**\n\nValidates HubSpot's x-hubspot-signature-v3 header (HMAC-SHA256 using the app's Client Secret) before any persona event is trusted. Requests older than 5 minutes or with a bad signature are rejected and alerted on, never processed.\n\nSETUP REQUIRED: set the HUBSPOT_CLIENT_SECRET environment variable in n8n, and confirm the reconstructed request URI matches exactly what HubSpot signs for your instance before relying on this in production.",
+        "height": 384,
+        "width": 704
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3984,
+        1440
+      ],
+      "typeVersion": 1,
+      "id": "b1-sticky-sig-0001",
+      "name": "Sticky Note: Signature Verification"
+    },
+    {
+      "parameters": {
+        "content": "**Production Hardening Notes**\n\n• Encharge write calls now use node-level retryOnFail (3 tries, spaced out) so transient errors (429/5xx) self-heal before the sheet-based failure counter/alert below even engages.\n• 'Last Synced Persona' in the audit log now only ever reflects a value that actually synced - a failed attempt is tracked separately as 'Target Persona' and never overwrites it.\n• KNOWN LIMITATION: Google Sheets is not transactional. Two webhook events for the same contact arriving within moments of each other could both read the same 'previous' row before either writes back, causing a duplicate Encharge write. Load-test concurrent webhooks before go-live; move to a real datastore (Postgres/Airtable) if this is a realistic scenario for this client.",
+        "height": 432,
+        "width": 976
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1216,
+        1472
+      ],
+      "typeVersion": 1,
+      "id": "b1-sticky-hardening-0001",
+      "name": "Sticky Note: Hardening Notes"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $json.email }}",
+            "HubSpot Contact ID": "={{ $json.hubspotContactId }}",
+            "HubSpot Event ID": "={{ $json.hubspotEventId }}",
+            "Previous Persona": "={{ $json.previousPersona }}",
+            "Target Persona": "={{ $json.newPersona }}",
+            "Last Synced Persona": "={{ $json.previousPersona }}",
+            "Sync Status": "Rejected",
+            "Skip Reason": "Unsupported Persona",
+            "Retry Count": "0",
+            "Last Synced At": "={{ $now.toISO() }}",
+            "Last Error": "",
+            "HTTP Status": ""
+          },
+          "matchingColumns": [
+            "HubSpot Contact ID"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Previous Persona",
+              "displayName": "Previous Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Persona",
+              "displayName": "Target Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced Persona",
+              "displayName": "Last Synced Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sync Status",
+              "displayName": "Sync Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced At",
+              "displayName": "Last Synced At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b1-log-rejected-0001",
+      "name": "Google Sheets: Log Rejected Persona",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2200,
+        800
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "NEW: the false branch of 'If: Persona Actually Changed?' previously dead-ended silently (no sync needed, invalid email, or unmapped persona). Now it's recorded for observability, without ever overwriting the last real synced value."
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst error = $json.error || {};\nconst code = error.httpCode || 500;\nconst isTransient = code == 429 || code >= 500;\nconst retryCount = ($json.retryCount || 0) + 1;\n\nif (!isTransient) {\n    return { json: { ...$json, retryCount, failReason: 'Persistent error (HTTP ' + code + ')', action: 'fail' } };\n}\nif (retryCount > 3) {\n    return { json: { ...$json, retryCount, failReason: 'Max retries exceeded', action: 'fail' } };\n}\nreturn { json: { ...$json, retryCount, action: 'retry' } };\n"
+      },
+      "id": "b1-error-router",
+      "name": "Code: Determine Retry or Fail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        1350
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "qc",
+              "leftValue": "={{ !$json.error || $json.error?.httpCode == 404 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-qc-ok",
+      "name": "If: QC OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -960,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "rd",
+              "leftValue": "={{ !$json.error || $json.error?.httpCode == 404 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-rd-ok",
+      "name": "If: RD OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -320,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "add",
+              "leftValue": "={{ !$json.error && $json.success !== false }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-add-ok",
+      "name": "If: Add OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{ $json.success !== false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-if-upsert-ok",
+      "name": "If: Upsert OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1500,
+        1240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "retry",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1-if-should-retry",
+      "name": "If: Should Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -300,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-suppressed",
+              "leftValue": "={{ .isSuppressed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-suppressed-1786539694824",
+      "name": "If: Is Suppressed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2350,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0",
+          "mode": "list",
+          "cachedResultName": "Re-engagement Drafts & Logs"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2033732252,
+          "mode": "list",
+          "cachedResultName": "Persona Sync Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gmWVksGEzaGPd-SdsugBVRWrEY4Fqgt-cy6O7dK_su0/edit#gid=2033732252"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact Email": "={{ $json.email }}",
+            "HubSpot Contact ID": "={{ $json.hubspotContactId }}",
+            "HubSpot Event ID": "={{ $json.hubspotEventId }}",
+            "Previous Persona": "={{ $json.previousPersona }}",
+            "Target Persona": "={{ $json.newPersona }}",
+            "Last Synced Persona": "={{ $json.previousPersona }}",
+            "Sync Status": "Skipped",
+            "Skip Reason": "SUPPRESSED / DO_NOT_CONTACT",
+            "Retry Count": "0",
+            "Last Synced At": "={{ $now.toISO() }}",
+            "Last Error": "",
+            "HTTP Status": ""
+          },
+          "matchingColumns": [
+            "HubSpot Contact ID"
+          ],
+          "schema": [
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Contact ID",
+              "displayName": "HubSpot Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HubSpot Event ID",
+              "displayName": "HubSpot Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Previous Persona",
+              "displayName": "Previous Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Target Persona",
+              "displayName": "Target Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced Persona",
+              "displayName": "Last Synced Persona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sync Status",
+              "displayName": "Sync Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skip Reason",
+              "displayName": "Skip Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Synced At",
+              "displayName": "Last Synced At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HTTP Status",
+              "displayName": "HTTP Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "node-log-suppressed-1786539694824",
+      "name": "Google Sheets: Log Skipped (Suppressed)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2100,
+        1550
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MgHCH4p04He3SiPL",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "NEW: the false branch of 'If: Persona Actually Changed?' previously dead-ended silently (no sync needed, invalid email, or unmapped persona). Now it's recorded for observability, without ever overwriting the last real synced value."
+    }
+  ],
+  "connections": {
+    "Code: Filter Persona Events": {
+      "main": [
+        [
+          {
+            "node": "If: Recognized Persona Value?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Recognized Persona Value?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Get Contact Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Rejected Persona",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Get Contact Email": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Check Sync Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail: Contact Fetch Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Check Sync Log": {
+      "main": [
+        [
+          {
+            "node": "Code: Compare Against Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Compare Against Log": {
+      "main": [
+        [
+          {
+            "node": "If: Is Suppressed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Persona Actually Changed?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Encharge Upsert Person",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Skipped (No Change Needed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Upsert Person": {
+      "main": [
+        [
+          {
+            "node": "If: Upsert OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Remove QC Tag (unconditional)": {
+      "main": [
+        [
+          {
+            "node": "If: QC OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Remove RD Tag (unconditional)": {
+      "main": [
+        [
+          {
+            "node": "If: RD OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request: Encharge Add Tag": {
+      "main": [
+        [
+          {
+            "node": "If: Add OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Log Failure": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Sync Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Workflow Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: HubSpot Persona Change": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code: Verify HubSpot Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Verify HubSpot Signature": {
+      "main": [
+        [
+          {
+            "node": "If: Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Code: Filter Persona Events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail: Invalid Webhook Signature Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Log Rejected Persona": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Unrecognized Persona Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: QC OK?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Remove RD Tag (unconditional)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Determine Retry or Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: RD OK?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Encharge Add Tag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Determine Retry or Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Add OK?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Upsert Sync Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Determine Retry or Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Determine Retry or Fail": {
+      "main": [
+        [
+          {
+            "node": "If: Should Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Upsert OK?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Remove QC Tag (unconditional)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Determine Retry or Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Should Retry?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request: Encharge Upsert Person",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Log Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Is Suppressed?": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: Log Skipped (Suppressed)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If: Persona Actually Changed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e751229583485ca5c77b52556ec4fb2019695e29b68385a876d23c40e7d61a6"
+  }
+}
