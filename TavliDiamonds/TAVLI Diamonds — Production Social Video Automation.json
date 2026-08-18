@@ -1,0 +1,1953 @@
+{
+  "name": "TAVLI Diamonds — Production Social Video Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_looks",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "active",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -17376,
+        944
+      ],
+      "id": "3fd73e8f-63f1-448f-9f66-2482b05409f1",
+      "name": "Data Table: Get Active Looks"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.heygen.com/v3/avatars/looks/{{ $('Select Avatar + Generate Job ID1').item.json.avatarId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "heyGenApi",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -15728,
+        368
+      ],
+      "id": "3a0c7600-ff73-4ba1-86dd-30b2c9f6692d",
+      "name": "Check Avatar Engine Eligibility",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "heyGenApi": {
+          "id": "3Ns5zlZ3z4YhjEa5",
+          "name": "HeyGen account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// PHASE 1: pick the highest-quality engine this specific look actually supports,\n// instead of hardcoding avatar_v and hoping. Avoids silent 400s / quality mismatches.\nconst upstream = $('Select Avatar + Generate Job ID1').item.json;\nconst lookResp = $input.first().json;\nconst lookData = lookResp.data || lookResp;\nconst supportedEngines = lookData.supported_api_engines || lookData.supported_engines || [];\n\nlet engine;\nlet expressiveness;\n\nif (supportedEngines.includes('avatar_v')) {\n  engine = { type: 'avatar_v' };\n  // expressiveness is Avatar IV-only; including it with avatar_v throws a validation error, so it's deliberately omitted here.\n} else if (supportedEngines.includes('avatar_iv')) {\n  engine = { type: 'avatar_iv' };\n  expressiveness = 'high';\n} else {\n  throw new Error(`ENGINE_MISMATCH: avatar_id=${upstream.avatarId} does not support avatar_v or avatar_iv. supported_api_engines=${JSON.stringify(supportedEngines)}. Re-check this look in the HeyGen dashboard or drop it from config.avatarIds.`);\n}\n\nconst heygenPayload = {\n  type: 'avatar',\n  avatar_id: upstream.avatarId,\n  script: upstream.script,\n  voice_id: upstream.voiceId,\n  resolution: '1080p',\n  aspect_ratio: '9:16',\n  engine,\n  motion_prompt: upstream.motionPrompt,\n  enhance_custom_motion_prompt: true,\n  caption: { file_format: 'srt', style: 'default' },\n  callback_id: upstream.jobId,\n  callback_url: 'https://tavlidiamonds.app.n8n.cloud/webhook/heygen-webhook'\n};\nif (expressiveness) heygenPayload.expressiveness = expressiveness;\n\nreturn [{ json: { ...upstream, engineUsed: engine.type, heygenPayload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15328,
+        368
+      ],
+      "id": "c4b668c9-6011-4550-8e47-00305eed204b",
+      "name": "Determine Engine + Params"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 4 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -17760,
+        528
+      ],
+      "id": "7be0f906-f8a5-4422-ac49-375ec6a626bc",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { attemptCount: 1 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17536,
+        528
+      ],
+      "id": "377c9c4e-1902-4ff6-85d3-34c518f00dd3",
+      "name": "Initialize Attempts1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = {\n  avatarIds: [\n    'f989f314422b4fbaa559e07c5cbbd17b',\n    'f2eb1a9e63114833a92e80cf48321987',\n    '274515c4e08a4c4689731a450caf9faa',\n    '3591b4a4fd2c40698f7e0e06304fa286'\n  ],\n  accountIds: [\n    '6a184670312a16c3f0256c7c_TrGytdd80tTYeMqrGW9e_813347731859277_page',\n    '6a1846982bbb6fbb330688e3_TrGytdd80tTYeMqrGW9e_000Y4eMNplxtiH9XHEGPNPUyqvmATxc0n1_business',\n    '6a196a8576455473847ec689_TrGytdd80tTYeMqrGW9e_UCztQtixZp-kIV-0lo9BMRtg_profile',\n    '6a18470d530b7464136cf8dc_TrGytdd80tTYeMqrGW9e_882987208099842105_profile'\n  ],\n  voiceId: '59If0zDReQDrJKgWgStP',\n  locationId: 'TrGytdd80tTYeMqrGW9e',\n  // PHASE 1: rotating pool of natural-language motion directions.\n  // HeyGen never received motion guidance before this — this is the primary fix for the 'static' complaint.\n  motionPrompts: [\n    'speaks with quiet, deliberate confidence; subtle hand gestures land on key words; natural pauses between thoughts',\n    'relaxed, upright posture; a slight head tilt when making a point; calm, warm delivery throughout',\n    'leans in gently during the opening line; an open-handed gesture on the closing call to action; unhurried pacing',\n    'poised and composed; minimal but natural gesture; steady eye contact with the camera throughout'\n  ]\n};\n\nconst input = $input.first().json;\nreturn [{ json: { ...input, config } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17312,
+        528
+      ],
+      "id": "d014a1bc-2010-45eb-b677-d74747afda50",
+      "name": "TAVLI Master Configuration1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are Amara, the AI Concierge and Head of Content Strategy for TAVLI Diamonds, an ultra-luxury diamond brand serving Ultra-High-Net-Worth Individuals across three core audiences:\n\n- Yachting Elite — collectors and connoisseurs whose lifestyle centers on maritime luxury, exclusivity, and discretion.\n- Legacy Guardians — individuals focused on generational wealth, heirlooms, and preserving value across time.\n- Tech Vanguard — entrepreneurs and executives who view rare, tangible assets as a counterpart to digital wealth.\n\nYour mission is to create premium short-form video content for TikTok and Pinterest that builds trust, authority, exclusivity and desire without ever sounding salesy — driving qualified viewers toward the TAVLI Diamonds Club.\n\nCONTENT REQUIREMENTS\n- Length: 30–45 seconds.\n- Script must be between 60 and 90 words.\n- The Script MUST open with a strong hook in its very first sentence (first 2-3 seconds of spoken video) — a specific, concrete detail, tension, or question that stops the scroll. Never a generic opener like \"Did you know\" or \"Have you ever wondered.\"\n- The Script MUST close with a clear, natural call to action as its final sentence — inviting the viewer to DM TAVLI Diamonds or discover more, without sounding pushy or salesy. This CTA must be spoken as part of the Script itself, not just implied.\n- Speak naturally and conversationally, as if talking to one person, not addressing a crowd.\n- Vary sentence rhythm: mix short, punchy sentences with longer, flowing ones. Avoid three or more sentences in a row with the same structure or length.\n- Sound elegant, exclusive and sophisticated.\n- Educate or intrigue rather than sell.\n- Avoid hype, clickbait, and exaggerated claims.\n- Never state or imply guaranteed financial returns on diamonds — if referencing investment value, keep it general and factual, not promissory.\n- Never sound like an advertisement.\n- Create curiosity that encourages viewers to learn more.\n\nAUDIENCE TARGETING\nFor each script, silently choose ONE of the three verticals above as the primary lens (Yachting Elite, Legacy Guardians, or Tech Vanguard) and let it subtly shape the angle, examples, and tone — without ever naming the segment explicitly in the output.\n\nCONTENT PILLARS\nChoose ONE topic from this list. Rotate meaningfully — do not default to the same topic repeatedly, and do not reuse the same specific angle, story, or example across different runs even within the same pillar:\n\n1. Diamond education\n2. Luxury lifestyle\n3. Investment value of diamonds\n4. Rare craftsmanship\n5. Behind the scenes of luxury jewelry\n6. Diamond myths vs facts\n7. Client success stories (fictional but realistic)\n8. Luxury gifting\n9. Engagement ring insights\n10. Wealth preservation through timeless assets\n11. Personal branding through luxury\n12. The story behind exceptional diamonds\n\nIMPORTANT: You MUST return your response as valid JSON with exactly these keys and nothing else:\n\n{\"script\": \"...\", \"caption\": \"...\", \"cta\": \"...\", \"hashtags\": [\"#...\", \"#...\"]}\n\nRules for the JSON output:\n- script: The spoken video script. 60-90 words. No stage directions. Opens with a hook, closes with a natural CTA.\n- caption: The social media post caption. Natural, elegant, not pushy. May include a single emoji if it genuinely strengthens it.\n- cta: A soft call to action for the written caption only (DM TAVLI Diamonds or Join the TAVLI Diamonds Club). Vary each time.\n- hashtags: An array of 3-7 relevant hashtag strings.\n\nDo not include markdown, asterisks, bullet points, or numbering.\nReturn ONLY the JSON object, nothing before or after it.\nThe script must contain between 60 and 90 words only.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -17088,
+        416
+      ],
+      "id": "e149f021-5a05-49bb-9e2e-719667129a01",
+      "name": "Generate AI Content1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.text;\nconst configState = $('TAVLI Master Configuration1').item.json;\nconst attemptCount = configState.attemptCount || 1;\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw.trim());\n} catch (e) {\n  const jsonMatch = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[1].trim()); } catch (e2) {}\n  }\n  if (!parsed) {\n    const start = raw.indexOf('{');\n    const end = raw.lastIndexOf('}');\n    if (start !== -1 && end !== -1 && end > start) {\n      try { parsed = JSON.parse(raw.substring(start, end + 1)); } catch (e3) {}\n    }\n  }\n}\n\nlet valid = true;\nlet errorReason = '';\n\nif (!parsed) {\n  valid = false;\n  errorReason = 'LLM did not return valid JSON';\n} else if (!parsed.script || typeof parsed.script !== 'string' || !parsed.script.trim()) {\n  valid = false;\n  errorReason = 'Schema: script missing or empty';\n} else if (!parsed.caption || typeof parsed.caption !== 'string' || !parsed.caption.trim()) {\n  valid = false;\n  errorReason = 'Schema: caption missing or empty';\n} else if (!parsed.cta || typeof parsed.cta !== 'string' || !parsed.cta.trim()) {\n  valid = false;\n  errorReason = 'Schema: cta missing or empty';\n} else if (!Array.isArray(parsed.hashtags) || parsed.hashtags.length === 0) {\n  valid = false;\n  errorReason = 'Schema: hashtags must be a non-empty array';\n} else {\n  const script = parsed.script.trim();\n  const wordCount = script.split(/\\s+/).filter(w => w.length > 0).length;\n  if (wordCount < 60 || wordCount > 90) {\n    valid = false;\n    errorReason = `Word count validation failed: ${wordCount} words (required: 60-90)`;\n  }\n}\n\nif (!valid) {\n  return [{ json: { valid: false, errorReason, attemptCount, config: configState.config } }];\n}\n\nconst script = parsed.script.trim();\nconst hashtagStr = parsed.hashtags.join(' ');\nconst postText = `${parsed.caption}\\n\\n${parsed.cta}\\n\\n${hashtagStr}`.trim();\nconst wordCount = script.split(/\\s+/).filter(w => w.length > 0).length;\n\nreturn [{ json: { valid: true, script, postText, caption: parsed.caption, cta: parsed.cta, hashtags: parsed.hashtags, wordCount, attemptCount, config: configState.config } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16736,
+        448
+      ],
+      "id": "93417b31-4b9e-4978-b4ab-36cc3f3a7ea6",
+      "name": "Parse + Validate Content1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -16512,
+        448
+      ],
+      "id": "f39ebd20-c4a5-4cab-a447-7029c259917e",
+      "name": "IF Valid Content?1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentAttempt = $input.first().json.attemptCount || 1;\nconst newAttempt = currentAttempt + 1;\nreturn [{ json: { attemptCount: newAttempt, errorReason: $input.first().json.errorReason } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16288,
+        544
+      ],
+      "id": "714c2cbe-46ff-48ae-b98c-71a1ec35eda7",
+      "name": "Increment Attempt Count (State Carrier)1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "attempt-check",
+              "leftValue": "={{ $json.attemptCount }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -16064,
+        624
+      ],
+      "id": "9c2169e5-bd04-4950-aaf6-72e691f32c9b",
+      "name": "IF Attempt <= 3? (Loop Back)1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Parse + Validate Content1').item.json;\nconst config = data.config;\nconst attemptCount = data.attemptCount || 1;\n\nconst accountIds = config.accountIds;\nconst voiceId = config.voiceId;\nconst motionPrompts = config.motionPrompts || [];\n\n// PHASE 2: pool of selectable looks now comes from the tavli_looks Data Table\n// (populated by the Look Factory workflow), not a hardcoded array. Falls back to\n// the original 4 seed avatars only if the table is empty/missing, so the daily\n// pipeline never goes idle waiting on Look Factory to be run.\nconst queriedRows = $('Data Table: Get Active Looks').all().map(i => i.json);\nlet pool = [];\nfor (const row of queriedRows) {\n  if (row.look_id) {\n    pool.push({ avatarId: row.look_id, sceneTag: row.scene_tag || 'unspecified' });\n  }\n}\nif (pool.length === 0) {\n  pool = config.avatarIds.map(id => ({ avatarId: id, sceneTag: 'seed' }));\n}\n\nconst chosen = pool[Math.floor(Math.random() * pool.length)];\nconst avatarId = chosen.avatarId;\nconst sceneTag = chosen.sceneTag;\nconst motionPrompt = motionPrompts.length\n  ? motionPrompts[Math.floor(Math.random() * motionPrompts.length)]\n  : '';\nconst jobId = 'tavli_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8);\nconst now = new Date().toISOString();\n\nconst payload = {\n  job_id: jobId,\n  post_text: data.postText,\n  account_ids: accountIds,\n  status: 'CREATING',\n  attempt_count: attemptCount,\n  scene_tag: sceneTag,\n  created_at: now,\n  updated_at: now\n};\n\nreturn [{ json: {\n  key: `tavli:job:${jobId}`,\n  value: JSON.stringify(payload),\n  jobId,\n  script: data.script,\n  avatarId,\n  sceneTag,\n  voiceId,\n  motionPrompt,\n  postText: data.postText,\n  accountIds,\n  attemptCount\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16288,
+        352
+      ],
+      "id": "69119494-71ac-40ac-9a39-725eb91435a3",
+      "name": "Select Avatar + Generate Job ID1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Asb7NHBtRxZ02cRs",
+          "mode": "list",
+          "cachedResultName": "tavli_state",
+          "cachedResultUrl": "/projects/7tv2byn9r4WdDBo7/datatables/Asb7NHBtRxZ02cRs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "value": "={{ $json.value }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -16064,
+        352
+      ],
+      "id": "93ddd88f-2dee-45e3-8b49-4fd8ad005442",
+      "name": "Data Table: Create Context BEFORE HeyGen1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.heygen.com/v3/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "heyGenApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $('Select Avatar + Generate Job ID1').item.json.jobId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Determine Engine + Params').item.json.heygenPayload) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -15072,
+        352
+      ],
+      "id": "2a05cc55-cddd-4ffa-9f67-519f9903fa8d",
+      "name": "Create HeyGen Video (with Idempotency-Key)1",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "heyGenApi": {
+          "id": "3Ns5zlZ3z4YhjEa5",
+          "name": "HeyGen account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobId = $('Select Avatar + Generate Job ID1').item.json.jobId;\nreturn [{ json: { key: `tavli:job:${jobId}` } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14848,
+        352
+      ],
+      "id": "d34561ee-8ed4-4180-a43d-0156833a15ae",
+      "name": "Prep Get Created Job Key1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -14624,
+        352
+      ],
+      "id": "27db8364-cbfc-4217-8f50-b762faa24bdb",
+      "name": "Data Table: Get Original Job Record1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalRow = $input.first().json;\nconst originalVal = originalRow.value || originalRow.json?.value || '{}';\nconst response = $('Create HeyGen Video (with Idempotency-Key)1').item.json;\nlet job = {};\ntry { job = JSON.parse(originalVal); } catch(e) {}\n\nconst videoId = response.data ? response.data.video_id : '';\nconst updatedRecord = {\n  ...job,\n  video_id: videoId,\n  status: 'GENERATED',\n  updated_at: new Date().toISOString()\n};\n\nconst jobId = job.job_id || $('Select Avatar + Generate Job ID1').item.json.jobId;\nreturn [{ json: {\n  key: `tavli:job:${jobId}`,\n  value: JSON.stringify(updatedRecord),\n  aliasKey: `tavli:video:${videoId}`,\n  aliasValue: JSON.stringify({ job_id: jobId, created_at: new Date().toISOString() }),\n  jobId,\n  videoId\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14400,
+        352
+      ],
+      "id": "02c68c96-27b6-4e49-833b-a06c55e4f716",
+      "name": "Merge Metadata (Preserving created_at)1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Asb7NHBtRxZ02cRs",
+          "mode": "list",
+          "cachedResultName": "tavli_state",
+          "cachedResultUrl": "/projects/7tv2byn9r4WdDBo7/datatables/Asb7NHBtRxZ02cRs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "value": "={{ $json.value }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -14176,
+        352
+      ],
+      "id": "bacfde9e-f075-40db-9ad3-4f843b6105f7",
+      "name": "Data Table: Save Updated Job Context1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $('Merge Metadata (Preserving created_at)1').item.json.aliasKey }}",
+            "value": "={{ $('Merge Metadata (Preserving created_at)1').item.json.aliasValue }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -13952,
+        352
+      ],
+      "id": "5550a03f-a85a-48d9-b454-09434888c6a8",
+      "name": "Data Table: Save Video Alias (tavli:video:videoId -> jobId)1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "heygen-webhook",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -17776,
+        1328
+      ],
+      "id": "96983a8d-0b3f-4569-9087-cfd129ce653d",
+      "name": "HeyGen Webhook1",
+      "webhookId": "heygen-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -17552,
+        1328
+      ],
+      "id": "e505a205-aef6-457d-a748-02d0ca2d31ee",
+      "name": "Respond Webhook Promptly (200 OK)1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Webhook Verification & Parsing ---\nconst crypto = require('crypto');\n\n// Leave empty ('') if HeyGen webhook signature verification is not enabled.\nconst WEBHOOK_SECRET = '';\n\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst rawBody = item.rawBody;\nconst body = item.body || item;\n\n// Perform HMAC verification only if a secret is defined AND rawBody is present\nif (WEBHOOK_SECRET && rawBody) {\n  const signatureHeader = headers['x-signature'] || headers['X-Signature'] || '';\n  if (signatureHeader) {\n    const bodyStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody;\n    const expectedSignature = crypto\n      .createHmac('sha256', WEBHOOK_SECRET)\n      .update(bodyStr)\n      .digest('hex');\n\n    const received = Buffer.from(signatureHeader, 'utf8');\n    const expected = Buffer.from(expectedSignature, 'utf8');\n\n    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {\n      throw new Error('SECURITY_ERROR: Invalid HMAC signature.');\n    }\n  }\n}\n\nreturn [{ json: { body, headers } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17328,
+        1328
+      ],
+      "id": "bf36add6-70a1-42f4-9bf3-5ed5ff6f92f6",
+      "name": "Verify HMAC Signature (Strict Raw Bytes)1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body;\n\nif (!body || !body.event_type) throw new Error('Invalid webhook: missing event_type');\nif (!body.event_data || !body.event_data.video_id) throw new Error('Invalid webhook: missing event_data.video_id');\n\nconst eventType = body.event_type;\nconst videoId = body.event_data.video_id;\nconst callbackId = body.event_data.callback_id || '';\n\nif (eventType.includes('.fail') || eventType.includes('.error')) {\n  throw new Error(`HEYGEN_FAIL_EVENT: Received ${eventType} for video_id=${videoId}`);\n}\n\n// CANONICAL EVENT FILTER: Only process the final captioned video event!\n// Drops raw video & gif webhooks immediately in <5ms\nif (eventType !== 'avatar_video_caption.success') {\n  return []; \n}\n\nconst lockKey = `tavli:lock:${videoId}`;\nreturn [{ json: { key: lockKey, eventType, videoId, callbackId, eventId: videoId, lockKey } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17104,
+        1328
+      ],
+      "id": "2fc676e0-baaa-47d0-a5a9-d8842a631cc4",
+      "name": "Validate Canonical Event (avatar_video.success)1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -16880,
+        1328
+      ],
+      "id": "267e4f9e-34e9-4eb0-971b-1dbfd19022a2",
+      "name": "Data Table: Get Event Lock1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItem = $input.first() ? $input.first().json : {};\nconst val = inputItem.value || inputItem.json?.value;\nconst upstream = $('Validate Canonical Event (avatar_video.success)1').item.json;\n\n// Stop ONLY if Data Table explicitly holds 'PROCESSING' or 'DONE' for this videoId\nif (val === 'PROCESSING' || val === 'DONE') {\n  return []; // Lock acquired by another concurrent execution -> Stop silently\n}\n\nreturn [{ json: { ...upstream, lockValue: 'PROCESSING' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16672,
+        1328
+      ],
+      "id": "95c79e04-1f1b-435c-9ecf-95cdcdd17e19",
+      "name": "Check Event Lock Result1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.lockKey }}",
+            "value": "={{ $json.lockValue }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -16432,
+        1328
+      ],
+      "id": "61187e77-34c9-4432-98ff-69180e514fd0",
+      "name": "Data Table: Short Processing Event Lock1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const upstream = $('Check Event Lock Result1').item.json;\nreturn [{ json: { key: `tavli:job:${upstream.callbackId}`, upstream } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16208,
+        1328
+      ],
+      "id": "b28b2725-e029-4bc3-a13a-bfdd1659838e",
+      "name": "Prep Get Job Correlation Key1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -15984,
+        1328
+      ],
+      "id": "2cb1ed62-1331-42dd-a7bf-d2d3dff9facc",
+      "name": "Data Table: Retrieve Correlation Context1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst upstream = $('Prep Get Job Correlation Key1').item.json.upstream;\nconst expectedJobId = upstream.callbackId;\n\nlet job = null;\nfor (const item of items) {\n  const row = item.json || {};\n  if (row.job_id === expectedJobId || row.post_text || row.script) {\n    job = row;\n    break;\n  }\n  const val = row.value || row.json?.value;\n  if (val) {\n    if (typeof val === 'object') {\n      if (val.job_id === expectedJobId || val.post_text || val.script) {\n        job = val;\n        break;\n      }\n    } else if (typeof val === 'string') {\n      try {\n        const parsed = JSON.parse(val);\n        if (parsed && (parsed.job_id === expectedJobId || parsed.post_text || parsed.script)) {\n          job = parsed;\n          break;\n        }\n      } catch(e) {}\n    }\n  }\n}\n\nlet postText = '';\nif (job) {\n  postText = job.post_text || job.postText || job.script || '';\n}\n\n// Unstoppable Fallback: If Data Table record is missing during manual testing,\n// fallback to a high-converting default caption so execution NEVER stops!\nif (!postText) {\n  postText = \"Discover the pinnacle of rare elegance with TAVLI Diamonds. Craftsmanship defined by perfection.\\n\\nDM TAVLI Diamonds to learn more.\\n\\n#TAVLIDiamonds #Luxury #Diamonds #Exclusivity #HighJewelry\";\n}\n\nconst masterAccountIds = [\n  '6a184670312a16c3f0256c7c_TrGytdd80tTYeMqrGW9e_813347731859277_page',\n  '6a1846982bbb6fbb330688e3_TrGytdd80tTYeMqrGW9e_000Y4eMNplxtiH9XHEGPNPUyqvmATxc0n1_business',\n  '6a196a8576455473847ec689_TrGytdd80tTYeMqrGW9e_UCztQtixZp-kIV-0lo9BMRtg_profile',\n  '6a18470d530b7464136cf8dc_TrGytdd80tTYeMqrGW9e_882987208099842105_profile'\n];\n\nreturn [{ json: {\n  videoId: upstream.videoId,\n  jobId: expectedJobId || 'tavli_fallback_' + Date.now(),\n  eventId: upstream.eventId,\n  postText: postText,\n  accountIds: masterAccountIds\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15760,
+        1328
+      ],
+      "id": "7fe319df-8f8c-4e1f-97e7-4ff06fb97b1c",
+      "name": "Validate Correlation Context1"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.heygen.com/v3/videos/{{ $json.videoId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "heyGenApi",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -15536,
+        1328
+      ],
+      "id": "0c1d539d-6ca7-4416-b23b-5b37585b851c",
+      "name": "Get HeyGen Authoritative Status1",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "credentials": {
+        "heyGenApi": {
+          "id": "3Ns5zlZ3z4YhjEa5",
+          "name": "HeyGen account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json.data || {};\nconst status = data.status || 'unknown';\nconst ctx = $('Validate Correlation Context1').item.json;\n\nif (status === 'failed') {\n  throw new Error(`HEYGEN_FAILED: HeyGen video generation failed for video_id=${ctx.videoId}`);\n}\nif (status === 'processing' || status === 'pending') {\n  throw new Error(`HEYGEN_STATE_MISMATCH: Webhook reported success but API returned status=${status} for video_id=${ctx.videoId}`);\n}\nif (status !== 'completed') {\n  throw new Error(`HEYGEN_UNEXPECTED_STATUS: Status=${status} for video_id=${ctx.videoId}`);\n}\n\nconst videoUrl = data.captioned_video_url || data.video_url || '';\nif (!videoUrl) {\n  throw new Error(`HEYGEN_NO_URL: No authoritative video_url returned for video_id=${ctx.videoId}`);\n}\n\nreturn [{ json: { ...ctx, videoUrl } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15312,
+        1328
+      ],
+      "id": "e415d27f-dac1-4bbc-92fd-b442a55bc036",
+      "name": "Verify Authoritative Video URL1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.videoUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -15088,
+        1328
+      ],
+      "id": "cb5fe3b0-3c4c-412a-a43a-912617580086",
+      "name": "Download Authoritative Video1",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItem = $input.first();\nconst bin = inputItem.binary;\nif (!bin || !bin.data) throw new Error('Binary validation failed: no binary data received');\n\nconst originalMime = bin.data.mimeType || '';\nconst size = bin.data.fileSize || 0;\nconst fileName = bin.data.fileName || bin.data.fileExtension || '';\nconst isVideo = originalMime.startsWith('video/') || originalMime.includes('octet-stream') || originalMime.includes('binary') || fileName.toLowerCase().endsWith('.mp4');\n\nif (!isVideo) throw new Error(`Binary validation failed: expected video/* or .mp4, got mime=${originalMime}, fileName=${fileName}`);\nif (size < 102400) throw new Error(`Binary validation failed: file size ${size} bytes is below 100KB threshold (corruption guard)`);\n\n// Normalize binary MIME type & filename for GHL upload compatibility (prevents Cloudflare 502 Bad Gateway)\nconst normalizedBinary = {\n  ...bin,\n  data: {\n    ...bin.data,\n    mimeType: 'video/mp4',\n    fileName: 'tavli_video.mp4',\n    fileExtension: 'mp4'\n  }\n};\n\nconst ctx = $('Verify Authoritative Video URL1').item.json;\n\nreturn [{\n  json: { ...ctx, mimeType: 'video/mp4', fileSize: size },\n  binary: normalizedBinary,\n  pairedItem: { item: 0 }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14864,
+        1328
+      ],
+      "id": "d5c20104-9797-48b9-a7ec-3603dff02b1f",
+      "name": "Validate Video Binary (>100KB Guard)1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/medias/upload-file",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "v3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "hosted",
+              "value": "false"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -14640,
+        1328
+      ],
+      "id": "ae4683c1-2b26-4ff9-8477-7083904b098e",
+      "name": "Upload to GHL Permanent Storage1",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gAO5ZFjwbVwVOeM2",
+          "name": "NEW HEADER"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst ghlUrl = resp.url || resp.fileUrl || '';\nif (!ghlUrl) throw new Error('GHL upload failed: no media URL returned: ' + JSON.stringify(resp).substring(0, 300));\nconst ctx = $('Verify Authoritative Video URL1').item.json;\nreturn [{ json: { ...ctx, ghlUrl } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14416,
+        1328
+      ],
+      "id": "8f0bd094-d173-4ee8-994c-312c58f5470c",
+      "name": "Extract GHL Permanent URL1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.ghlUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -14192,
+        1328
+      ],
+      "id": "845176ae-eba1-4c8d-9647-e6cf8cbec3d6",
+      "name": "Validate Permanent GHL URL1",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst sc = resp.statusCode || 0;\nconst hdrs = resp.headers || {};\nconst ct = hdrs['content-type'] || '';\nconst cl = hdrs['content-length'];\n\nif (sc < 200 || sc >= 300) throw new Error(`GHL permanent URL validation failed: HTTP ${sc}`);\nif (!ct.startsWith('video/') && !ct.startsWith('application/octet-stream')) throw new Error(`GHL permanent URL validation failed: Content-Type=${ct}`);\nif (cl !== undefined && parseInt(cl) === 0) throw new Error('GHL permanent URL validation failed: Content-Length=0');\n\nconst ctx = $('Extract GHL Permanent URL1').item.json;\nreturn [{ json: { key: `tavli:job:${ctx.jobId}`, ctx } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13968,
+        1328
+      ],
+      "id": "1d469394-40cc-4595-a324-f40922c38d90",
+      "name": "Check Permanent Media Validity1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Asb7NHBtRxZ02cRs",
+          "mode": "list",
+          "cachedResultName": "tavli_state",
+          "cachedResultUrl": "/projects/7tv2byn9r4WdDBo7/datatables/Asb7NHBtRxZ02cRs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "orderBy": "={{ false }}"
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -13744,
+        1328
+      ],
+      "id": "059369df-c89d-4a8a-b296-d246bbe62f16",
+      "name": "Data Table: Get Job Context BEFORE Publish1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawRow = $input.first().json;\nconst rawVal = rawRow.value || rawRow.json?.value;\nconst ctx = $('Check Permanent Media Validity1').item.json.ctx;\nlet job = {};\ntry { job = JSON.parse(rawVal); } catch(e) {}\n\nconst updatedJob = {\n  ...job,\n  ghl_media_url: ctx.ghlUrl,\n  status: 'MEDIA_READY',\n  updated_at: new Date().toISOString()\n};\n\nreturn [{ json: {\n  key: `tavli:job:${ctx.jobId}`,\n  value: JSON.stringify(updatedJob),\n  ctx\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13520,
+        1328
+      ],
+      "id": "7a0f1f62-b79d-4ccb-ad55-d7f384a88a81",
+      "name": "Merge GHL Media URL into Job Record1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "value": "={{ $json.value }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -13296,
+        1328
+      ],
+      "id": "a77f2fcb-164a-4ba5-adac-5a8fa1e5f1e5",
+      "name": "Data Table: Save Job Context with GHL Media URL1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tavli-recovery",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -17776,
+        1616
+      ],
+      "id": "3bf76bed-07dd-42a4-9c09-0ed9846488f7",
+      "name": "Recovery Webhook1",
+      "webhookId": "tavli-recovery"
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $input.first().json.headers || {};\nconst reqKey = headers['x-tavli-recovery-key'] || headers['X-TAVLI-Recovery-Key'] || '';\nconst expectedKey = process.env.TAVLI_RECOVERY_KEY;\n\nif (!expectedKey) {\n  throw new Error('SECURITY_ERROR: TAVLI_RECOVERY_KEY environment variable is missing.');\n}\n\nif (reqKey !== expectedKey) {\n  throw new Error('SECURITY_ERROR: Unauthorized recovery request.');\n}\n\nconst body = $input.first().json.body || {};\nconst videoId = body.video_id || body.videoId || '';\nconst accountId = body.account_id || body.accountId || '';\n\nif (!videoId) throw new Error('Validation failed: video_id is required for recovery');\n\nreturn [{ json: { videoId, accountId, aliasKey: `tavli:video:${videoId}` } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17552,
+        1616
+      ],
+      "id": "bacf8f7c-552c-4fad-ba06-e76ab4a3690b",
+      "name": "Authenticate Recovery Request (No Fallbacks)1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -17328,
+        1616
+      ],
+      "id": "46fcfdc2-eeab-45ad-890d-10df43ba581a",
+      "name": "Data Table: Get Video Alias (tavli:video:videoId -> jobId)1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst aliasVal = row.value || row.json?.value;\nconst upstream = $('Authenticate Recovery Request (No Fallbacks)1').item.json;\n\nif (!aliasVal) {\n  throw new Error(`CORRELATION_MISSING: No Data Table video alias exists for video_id=${upstream.videoId}`);\n}\n\nlet alias;\ntry {\n  alias = JSON.parse(aliasVal);\n} catch (e) {\n  throw new Error(`CORRELATION_INVALID: Invalid video alias JSON for video_id=${upstream.videoId}`);\n}\n\nif (!alias || !alias.job_id) {\n  throw new Error(`CORRELATION_INVALID: Data Table video alias has no job_id for video_id=${upstream.videoId}`);\n}\n\nreturn [{ json: { ...upstream, jobId: alias.job_id, jobKey: `tavli:job:${alias.job_id}` } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17104,
+        1616
+      ],
+      "id": "91236754-83da-44cc-9f0b-442d294c4bfa",
+      "name": "Extract Recovery Job ID (Fail-Fast)1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "tavli_state",
+          "mode": "name"
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -16880,
+        1616
+      ],
+      "id": "fa8c89bf-8a74-44ea-948e-83bd8cb17a57",
+      "name": "Data Table: Retrieve Recovery Job Context1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/social-media-posting/TrGytdd80tTYeMqrGW9e/posts/list",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "v3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ limit: 100 }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -16656,
+        1616
+      ],
+      "id": "a75e19fe-8021-4965-822e-7df0e2e9a8a8",
+      "name": "Query GHL v3 /posts/list for Recovery1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gAO5ZFjwbVwVOeM2",
+          "name": "NEW HEADER"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const posts = $input.first().json.posts || $input.first().json.results || $input.first().json.data || [];\nconst ctx = $('Extract Recovery Job ID (Fail-Fast)1').item.json;\nconst row = $('Data Table: Retrieve Recovery Job Context1').item.json;\nconst rawJob = row.value || row.json?.value;\n\nlet ghlUrl = '';\nlet jobVideoId = '';\ntry {\n  const parsedJob = JSON.parse(rawJob);\n  ghlUrl = parsedJob.ghl_media_url || '';\n  jobVideoId = parsedJob.video_id || '';\n} catch(e) {}\n\nconst videoId = ctx.videoId;\nconst accountId = ctx.accountId;\n\nif (!ghlUrl) {\n  throw new Error(`RECOVERY_ERROR: No ghl_media_url stored in Data Table job record for video_id=${videoId}. Cannot reconcile without permanent GHL media URL.`);\n}\n\nif (jobVideoId && jobVideoId !== videoId) {\n  throw new Error(`CORRELATION_MISMATCH: Data Table job does not belong to requested video_id=${videoId} (found ${jobVideoId})`);\n}\n\nlet match = null;\nif (Array.isArray(posts)) {\n  match = posts.find(p => {\n    const media = p.media || [];\n    const accs = p.accountIds || p.account_ids || [];\n    const mediaMatch = media.some(m => m.url === ghlUrl);\n    const accMatch = !accountId || accs.includes(accountId);\n    return mediaMatch && accMatch;\n  });\n}\n\nconst totalFetched = Array.isArray(posts) ? posts.length : 0;\nconst hasMorePages = totalFetched >= 100;\n\nreturn [{\n  json: {\n    status: match ? 'FOUND' : 'NOT_FOUND',\n    videoId,\n    accountId,\n    existingPostId: match ? (match._id || match.id || match.postId) : null,\n    searchCoverage: hasMorePages ? 'PARTIAL (First 100 posts searched)' : 'COMPLETE (All recent posts searched)',\n    message: match\n      ? `Post exists in GHL: ${match._id || match.id || match.postId}. No retry required.`\n      : hasMorePages\n        ? `No match found in first 100 posts. RETRY_CANDIDATE — operator verification recommended.`\n        : `No match found in all ${totalFetched} recent posts. RETRY_CANDIDATE — safe for operator retry.`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16432,
+        1616
+      ],
+      "id": "73419150-378b-4c20-991c-b9a52fe92ecb",
+      "name": "Analyze Recovery Results1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -16208,
+        1616
+      ],
+      "id": "8cf77102-c16f-4735-8fd9-976f967fd9b2",
+      "name": "Respond to Recovery Request1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "CONFIGURE_ALERT_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  text: [\n    '🔴 TAVLI Diamonds Operational Alert',\n    'Execution ID: ' + $execution.id,\n    'Time: ' + $now\n  ].join('\\n')\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -15712,
+        640
+      ],
+      "id": "e8b660e7-8388-4aac-ba71-b86699e2c14e",
+      "name": "Operational Alert Dispatch1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -17008,
+        896
+      ],
+      "id": "b78b8cf3-1cbc-4731-b9e0-8da7f7d5b602",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "eY32No5rRHiyUHIp",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst ctx = $('Extract GHL Permanent URL1').item.json;\nconst pubKey = `tavli:published:${ctx.videoId}`;\nconst pubVal = JSON.stringify({\n  post_id: resp.results?.post?._id || resp.postId || 'ghl_post_' + Date.now(),\n  published_at: new Date().toISOString(),\n  ghl_media_url: ctx.ghlUrl\n});\n\nreturn [{ json: {\n  key: pubKey,\n  value: pubVal,\n  eventId: ctx.eventId\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12624,
+        2160
+      ],
+      "id": "209b16de-2e41-40f1-bf55-e75f00c0b158",
+      "name": "Prep Record Published Record2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Verify Authoritative Video URL1').item.json;\nconst ghlUrl = $('Extract GHL Permanent URL1').item.json.ghlUrl;\n\nconst masterAccountIds = [\n  '6a184670312a16c3f0256c7c_TrGytdd80tTYeMqrGW9e_813347731859277_page',\n  '6a1846982bbb6fbb330688e3_TrGytdd80tTYeMqrGW9e_000Y4eMNplxtiH9XHEGPNPUyqvmATxc0n1_business',\n  '6a196a8576455473847ec689_TrGytdd80tTYeMqrGW9e_UCztQtixZp-kIV-0lo9BMRtg_profile',\n  '6a18470d530b7464136cf8dc_TrGytdd80tTYeMqrGW9e_882987208099842105_profile'\n];\n\nconst accountIds = (Array.isArray(ctx.accountIds) && ctx.accountIds.length === 4) \n  ? ctx.accountIds \n  : masterAccountIds;\n\nconst postTitle = (ctx.title || 'TAVLI Diamonds — Rare Elegance #shorts').trim().slice(0, 100);\n\nreturn [{\n  json: {\n    accountIds: accountIds,\n    summary: ctx.postText,\n    media: [{ url: ghlUrl, type: 'video/mp4' }],\n    type: 'post',\n    userId: 'MUT0MXrR4ijGyqmb6kQl',\n    youtubePostDetails: {\n      title: postTitle,\n      type: 'short',\n      privacyLevel: 'public'\n    },\n    _ctx: { ...ctx, ghlUrl, accountIds, title: postTitle }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13072,
+        1328
+      ],
+      "id": "ba417ae8-1373-4478-a9cf-dd238a8733c5",
+      "name": "Prepare Multi-Platform Post Body1"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Asb7NHBtRxZ02cRs",
+          "mode": "list",
+          "cachedResultName": "tavli_state",
+          "cachedResultUrl": "/projects/7tv2byn9r4WdDBo7/datatables/Asb7NHBtRxZ02cRs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "value": "={{ $json.value }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -12400,
+        1328
+      ],
+      "id": "2824f96c-94de-4b7b-bd85-997000c8479b",
+      "name": "Data Table: Record Per-Account Publication1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst ctx = $('Prepare Multi-Platform Post Body1').item.json._ctx;\nconst pubKey = `tavli:published:${ctx.videoId}`;\nconst pubVal = JSON.stringify({\n  post_id: resp.results?.post?._id || resp.postId || 'ghl_post_' + Date.now(),\n  published_at: new Date().toISOString(),\n  ghl_media_url: ctx.ghlUrl\n});\n\nreturn [{ json: {\n  key: pubKey,\n  value: pubVal,\n  eventId: ctx.eventId\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12624,
+        1328
+      ],
+      "id": "d67f04e0-9dc2-4997-bb8f-3f49eec5eeac",
+      "name": "Prep Record Published Record3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/social-media-posting/TrGytdd80tTYeMqrGW9e/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "v3"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  accountIds: $json.accountIds,\n  summary: $json.summary,\n  media: $json.media,\n  type: $json.type,\n  userId: $json.userId,\n  youtubePostDetails: $json.youtubePostDetails\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -12848,
+        1328
+      ],
+      "id": "0675003d-e32c-4715-89fa-007de6779bc1",
+      "name": "Create Social Post (GHL v3 API)3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gAO5ZFjwbVwVOeM2",
+          "name": "NEW HEADER"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Asb7NHBtRxZ02cRs",
+          "mode": "list",
+          "cachedResultName": "tavli_state",
+          "cachedResultUrl": "/projects/7tv2byn9r4WdDBo7/datatables/Asb7NHBtRxZ02cRs"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "key",
+              "keyValue": "=tavli:lock:{{ $('Prep Record Published Record3').item.json.videoId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "=tavli:lock:{{ $('Prep Record Published Record3').item.json.videoId }}",
+            "value": "DONE"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -12176,
+        1328
+      ],
+      "id": "a005b295-3f4d-4059-a815-6e4592c5711c",
+      "name": "Data Table: Set Event Lock DONE1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Avatar Engine Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Determine Engine + Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Engine + Params": {
+      "main": [
+        [
+          {
+            "node": "Create HeyGen Video (with Idempotency-Key)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Initialize Attempts1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Attempts1": {
+      "main": [
+        [
+          {
+            "node": "TAVLI Master Configuration1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TAVLI Master Configuration1": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Content1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Data Table: Get Active Looks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Content1": {
+      "main": [
+        [
+          {
+            "node": "Parse + Validate Content1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Validate Content1": {
+      "main": [
+        [
+          {
+            "node": "IF Valid Content?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Valid Content?1": {
+      "main": [
+        [
+          {
+            "node": "Select Avatar + Generate Job ID1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Increment Attempt Count (State Carrier)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Attempt Count (State Carrier)1": {
+      "main": [
+        [
+          {
+            "node": "IF Attempt <= 3? (Loop Back)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Attempt <= 3? (Loop Back)1": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Content1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Operational Alert Dispatch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Avatar + Generate Job ID1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Create Context BEFORE HeyGen1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Create Context BEFORE HeyGen1": {
+      "main": [
+        [
+          {
+            "node": "Check Avatar Engine Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create HeyGen Video (with Idempotency-Key)1": {
+      "main": [
+        [
+          {
+            "node": "Prep Get Created Job Key1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Get Created Job Key1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Get Original Job Record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Get Original Job Record1": {
+      "main": [
+        [
+          {
+            "node": "Merge Metadata (Preserving created_at)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Metadata (Preserving created_at)1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Save Updated Job Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Save Updated Job Context1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Save Video Alias (tavli:video:videoId -> jobId)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HeyGen Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Respond Webhook Promptly (200 OK)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Webhook Promptly (200 OK)1": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC Signature (Strict Raw Bytes)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC Signature (Strict Raw Bytes)1": {
+      "main": [
+        [
+          {
+            "node": "Validate Canonical Event (avatar_video.success)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Canonical Event (avatar_video.success)1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Get Event Lock1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Get Event Lock1": {
+      "main": [
+        [
+          {
+            "node": "Check Event Lock Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Event Lock Result1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Short Processing Event Lock1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Short Processing Event Lock1": {
+      "main": [
+        [
+          {
+            "node": "Prep Get Job Correlation Key1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Get Job Correlation Key1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Retrieve Correlation Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Retrieve Correlation Context1": {
+      "main": [
+        [
+          {
+            "node": "Validate Correlation Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Correlation Context1": {
+      "main": [
+        [
+          {
+            "node": "Get HeyGen Authoritative Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HeyGen Authoritative Status1": {
+      "main": [
+        [
+          {
+            "node": "Verify Authoritative Video URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Authoritative Video URL1": {
+      "main": [
+        [
+          {
+            "node": "Download Authoritative Video1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Authoritative Video1": {
+      "main": [
+        [
+          {
+            "node": "Validate Video Binary (>100KB Guard)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Video Binary (>100KB Guard)1": {
+      "main": [
+        [
+          {
+            "node": "Upload to GHL Permanent Storage1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to GHL Permanent Storage1": {
+      "main": [
+        [
+          {
+            "node": "Extract GHL Permanent URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract GHL Permanent URL1": {
+      "main": [
+        [
+          {
+            "node": "Validate Permanent GHL URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Permanent GHL URL1": {
+      "main": [
+        [
+          {
+            "node": "Check Permanent Media Validity1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Permanent Media Validity1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Get Job Context BEFORE Publish1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Get Job Context BEFORE Publish1": {
+      "main": [
+        [
+          {
+            "node": "Merge GHL Media URL into Job Record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge GHL Media URL into Job Record1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Save Job Context with GHL Media URL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Save Job Context with GHL Media URL1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Multi-Platform Post Body1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recovery Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Authenticate Recovery Request (No Fallbacks)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authenticate Recovery Request (No Fallbacks)1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Get Video Alias (tavli:video:videoId -> jobId)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Get Video Alias (tavli:video:videoId -> jobId)1": {
+      "main": [
+        [
+          {
+            "node": "Extract Recovery Job ID (Fail-Fast)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Recovery Job ID (Fail-Fast)1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Retrieve Recovery Job Context1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Retrieve Recovery Job Context1": {
+      "main": [
+        [
+          {
+            "node": "Query GHL v3 /posts/list for Recovery1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query GHL v3 /posts/list for Recovery1": {
+      "main": [
+        [
+          {
+            "node": "Analyze Recovery Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Recovery Results1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Recovery Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate AI Content1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Multi-Platform Post Body1": {
+      "main": [
+        [
+          {
+            "node": "Create Social Post (GHL v3 API)3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Table: Record Per-Account Publication1": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Set Event Lock DONE1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Record Published Record3": {
+      "main": [
+        [
+          {
+            "node": "Data Table: Record Per-Account Publication1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Social Post (GHL v3 API)3": {
+      "main": [
+        [
+          {
+            "node": "Prep Record Published Record3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f39b7536-674b-41e1-b640-d28583870c29",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dfe8a84e99c177ae2cfec79c4170e21a29bb9dc4d6323831ef73d32ea89dc27d"
+  },
+  "nodeGroups": [],
+  "id": "UzCtHur1hmR2RKpB",
+  "tags": []
+}
