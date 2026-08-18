@@ -1,0 +1,450 @@
+{
+  "name": "WF7 — Post-Checkout Guest Review Request [NEW]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF7: Automated Review Request\n\n🎯 **Purpose:** Automatically sends a friendly review request email to guests ~2 hours after they check out. Good reviews are critical for Airbnb ranking and future bookings.\n\n🔄 **Runs:** Every hour, automatically\n\n🛡️ **Safety:** Only sends once per guest (tracks via Google Sheets). Requires 'Guest Email' to be filled in the DB manually (Airbnb doesn't share guest emails via iCal).\n\n📋 **Required Setup:**\n• Add a 'Review Sent' column (TRUE/FALSE) to your Rental Automation DB Sheet1\n• Make sure 'Guest Email' column is filled for each booking",
+        "height": 310,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [0, -400],
+      "typeVersion": 1,
+      "id": "wf7-overview-note",
+      "name": "📋 WF7 Overview"
+    },
+    {
+      "parameters": {
+        "content": "⏰ **Hourly Trigger**\nRuns every hour. Checks the calendar for any guests who checked out in the last 2-4 hours and haven't yet received a review request.\n💡 The 2-4 hour window gives guests time to settle after leaving, making them more likely to leave a positive review.",
+        "height": 140,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [0, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-01",
+      "name": "📌 Note: Hourly Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "wf7-trigger",
+      "name": "⏰ Trigger: Run Every Hour"
+    },
+    {
+      "parameters": {
+        "content": "📆 **Fetch Recent Checkouts**\nFetches all calendar events where the end date (checkout) falls within the last 4 hours.\n💡 Uses Google Calendar's iCal sync. We look at events ending today between 'now minus 4 hours' and 'now' to find recent departures.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [224, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-02",
+      "name": "📌 Note: Fetch Checkouts"
+    },
+    {
+      "parameters": {
+        "calendarId": "n5s6ldu6ntj1jq6plmuuc8ve3odtpcoo@import.calendar.google.com",
+        "timeMin": "={{ $now.minus({ hours: 4 }).toISO() }}",
+        "timeMax": "={{ $now.toISO() }}",
+        "options": {
+          "singleEvents": true
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [224, 0],
+      "id": "wf7-calendar",
+      "name": "📆 Fetch Recent Checkouts from Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "U4a3NKSMT5HV1bJr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🔍 **Filter Real Bookings**\nRemoves Airbnb 'Not available' blocks and other non-guest events from the calendar results.\n💡 Airbnb iCal often includes 'BLOCKED' or 'Not available' entries — we only want real guest checkouts.",
+        "height": 130,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [448, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-03",
+      "name": "📌 Note: Filter Real Bookings"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter out non-booking calendar events (Airbnb blocked dates etc.)\nconst events = $input.all();\n\nconst realBookings = events.filter(event => {\n  const summary = (event.json.summary || '').toLowerCase();\n  return !summary.includes('not available') &&\n         !summary.includes('blocked') &&\n         !summary.includes('unavailable') &&\n         summary !== '';\n});\n\n// Also check that the event actually ENDED (checkout was) in the past 2-4 hours\nconst now = new Date();\nconst recentCheckouts = realBookings.filter(event => {\n  const endDateStr = event.json.end?.dateTime || event.json.end?.date;\n  if (!endDateStr) return false;\n  const endDate = new Date(endDateStr);\n  const hoursAgo = (now - endDate) / 3600000;\n  return hoursAgo >= 1.5 && hoursAgo <= 4;\n});\n\nif (recentCheckouts.length === 0) {\n  return [{ json: { noCheckouts: true } }];\n}\n\nreturn recentCheckouts.map(e => ({ json: { ...e.json, noCheckouts: false } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 0],
+      "id": "wf7-filter-bookings",
+      "name": "🔍 Filter: Keep Only Real Guest Checkouts"
+    },
+    {
+      "parameters": {
+        "content": "❓ **Recent Checkout Gate**\nChecks if any real guest just checked out. If no recent checkouts, the workflow stops here.\n💡 Prevents unnecessary processing and DB reads when there's nothing to do.",
+        "height": 120,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [672, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-04",
+      "name": "📌 Note: Checkout Gate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "wf7-cond-01",
+              "leftValue": "={{ $json.noCheckouts }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [672, 0],
+      "id": "wf7-checkout-gate",
+      "name": "❓ Any Recent Checkouts Found?"
+    },
+    {
+      "parameters": {
+        "content": "📋 **Read DB Review Status**\nReads the Google Sheets DB to check which guests have already received a review request email.\n💡 The 'Review Sent' column (TRUE/FALSE) prevents sending duplicate review requests if a guest checks out and the workflow fires multiple times.",
+        "height": 140,
+        "width": 340,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [896, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-05",
+      "name": "📌 Note: Read DB Review Status"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [896, 0],
+      "id": "wf7-read-db",
+      "name": "📋 Read Booking DB for Review Status & Guest Email",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🧮 **Match Checkout to DB & Check if Review Needed**\nMatches each calendar checkout event to its row in the Google Sheets DB.\nChecks:\n1. Has the review email already been sent? (Review Sent = TRUE)\n2. Is there a guest email available?\n3. Did the checkout really happen recently?\n💡 Only guests with an email AND no review yet sent will proceed.",
+        "height": 170,
+        "width": 360,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1120, -170],
+      "typeVersion": 1,
+      "id": "note-wf7-06",
+      "name": "📌 Note: Match & Check Review Status"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Match calendar checkouts to DB rows and check review status\nconst checkouts = $('🔍 Filter: Keep Only Real Guest Checkouts').all();\nconst dbRows = $('📋 Read Booking DB for Review Status & Guest Email').all();\n\nconst toReview = [];\n\nfor (const checkout of checkouts) {\n  const eventId = checkout.json.id;\n  const summary = checkout.json.summary;\n  \n  // Find matching DB row by ID or guest name\n  const dbRow = dbRows.find(row => \n    row.json.ID === eventId || \n    (row.json['Guest Name'] && summary && summary.toLowerCase().includes(row.json['Guest Name'].toLowerCase()))\n  );\n  \n  // Skip if no DB row found\n  if (!dbRow) continue;\n  \n  // Skip if review already sent\n  if (dbRow.json['Review Sent'] === 'TRUE' || dbRow.json['Review Sent'] === true) continue;\n  \n  // Get guest email\n  let guestEmail = dbRow.json['Guest Email'];\n  \n  // Try fallbacks if no email in DB\n  if (!guestEmail && checkout.json.description) {\n    const emailMatch = checkout.json.description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/);\n    if (emailMatch) guestEmail = emailMatch[0];\n  }\n  \n  // Skip if still no email\n  if (!guestEmail) continue;\n  \n  const guestName = dbRow.json['Guest Name'] || summary || 'Guest';\n  \n  toReview.push({\n    json: {\n      guestEmail,\n      guestName,\n      bookingId: eventId,\n      checkoutDate: checkout.json.end?.dateTime || checkout.json.end?.date,\n      dbRowId: dbRow.json.ID\n    }\n  });\n}\n\nif (toReview.length === 0) {\n  return [{ json: { noReviewNeeded: true } }];\n}\n\nreturn toReview.map(r => ({ ...r, json: { ...r.json, noReviewNeeded: false } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 0],
+      "id": "wf7-check-review",
+      "name": "🧮 Match Checkout to DB & Check Review Status"
+    },
+    {
+      "parameters": {
+        "content": "❓ **Review Email Gate**\nFinal check before sending. If no guests need a review request (already sent, no email, etc.), the workflow stops gracefully.\n💡 Prevents any accidental sends.",
+        "height": 120,
+        "width": 300,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1344, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-07",
+      "name": "📌 Note: Review Needed Gate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "wf7-cond-02",
+              "leftValue": "={{ $json.noReviewNeeded }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1344, 0],
+      "id": "wf7-review-gate",
+      "name": "❓ Does This Guest Need a Review Request?"
+    },
+    {
+      "parameters": {
+        "content": "📧 **Send Review Request Email**\nSends a warm, personalised review request email to the guest. References their name and stay at Bryson Road.\n💡 Sent ~2 hours after checkout — the optimal window when guests are still thinking about their stay but have had time to settle. Includes a direct Airbnb review link.",
+        "height": 160,
+        "width": 360,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1568, -160],
+      "typeVersion": 1,
+      "id": "note-wf7-08",
+      "name": "📌 Note: Send Review Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.guestEmail }}",
+        "subject": "How was your stay at Bryson Road? 🏠",
+        "emailType": "text",
+        "message": "=Hi {{ $json.guestName }},\n\nThank you so much for staying at Bryson Road — we hope you had a wonderful time in Edinburgh! 🏴󠁧󠁢󠁳󠁣󠁴󠁿\n\nIf you enjoyed your stay, we would really appreciate it if you could take 2 minutes to leave us a review on Airbnb. Reviews mean the world to small hosts like us and help other travellers find us too.\n\n👉 Leave a review: https://www.airbnb.com/\n\nIf anything wasn't quite right or could be improved, please reply to this email directly — we read every message and are always looking to make the experience better.\n\nWe hope to welcome you back to Edinburgh soon! 🎉\n\nWith warm wishes,\nThe Bryson Road Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1568, 0],
+      "id": "wf7-send-email",
+      "name": "📧 Send Review Request Email to Guest",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "💾 **Mark Review as Sent**\nUpdates the 'Review Sent' column in Google Sheets to TRUE for this booking.\n💡 This is the final step — ensures this guest won't receive another review request on the next hourly check.",
+        "height": 130,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [1792, -140],
+      "typeVersion": 1,
+      "id": "note-wf7-09",
+      "name": "📌 Note: Mark Review Sent"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.bookingId }}",
+            "Review Sent": "TRUE"
+          },
+          "matchingColumns": ["ID"],
+          "schema": [
+            { "id": "ID", "displayName": "ID", "required": false, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Review Sent", "displayName": "Review Sent", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1792, 0],
+      "id": "wf7-mark-sent",
+      "name": "💾 Mark 'Review Sent = TRUE' in DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⏰ Trigger: Run Every Hour": {
+      "main": [
+        [
+          {
+            "node": "📆 Fetch Recent Checkouts from Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📆 Fetch Recent Checkouts from Calendar": {
+      "main": [
+        [
+          {
+            "node": "🔍 Filter: Keep Only Real Guest Checkouts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Filter: Keep Only Real Guest Checkouts": {
+      "main": [
+        [
+          {
+            "node": "❓ Any Recent Checkouts Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Any Recent Checkouts Found?": {
+      "main": [
+        [
+          {
+            "node": "📋 Read Booking DB for Review Status & Guest Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "📋 Read Booking DB for Review Status & Guest Email": {
+      "main": [
+        [
+          {
+            "node": "🧮 Match Checkout to DB & Check Review Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧮 Match Checkout to DB & Check Review Status": {
+      "main": [
+        [
+          {
+            "node": "❓ Does This Guest Need a Review Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Does This Guest Need a Review Request?": {
+      "main": [
+        [
+          {
+            "node": "📧 Send Review Request Email to Guest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "📧 Send Review Request Email to Guest": {
+      "main": [
+        [
+          {
+            "node": "💾 Mark 'Review Sent = TRUE' in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "wf7-version-001",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "WF7ReviewRequest001",
+  "tags": []
+}

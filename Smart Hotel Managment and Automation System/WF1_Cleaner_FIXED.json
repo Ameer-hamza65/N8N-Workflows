@@ -1,0 +1,587 @@
+{
+  "name": "WF1 — Cleaner Schedule [FIXED + Annotated]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF1: Cleaner Schedule & Mid-Month Alerts\nPurpose: Keeps the cleaning team synced with the booking calendar.\nTriggers: Runs automatically on the 1st of every month (8:00 AM) and checks every 2 hours.\nActions:\n\nCompiles all checkouts for the current month and sends a master schedule via WhatsApp/Telegram.\n\nScans for any brand-new bookings added mid-month and alerts the cleaner within 4 hours to update their schedule",
+        "height": 192,
+        "width": 672
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        208,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "4cb6a793-5ff4-44a3-b9a7-d16392982a2c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 1 * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "27346e92-3f35-4d4a-85d6-31b663664eb6",
+      "name": "📅 Trigger: 1st of Month at 8AM"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "n5s6ldu6ntj1jq6plmuuc8ve3odtpcoo@import.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "https://www.airbnb.co.uk/calendar/ical/1156227451993163925.ics?t=c929ed666ec84fe4880f3b2d333d31ff"
+        },
+        "timeMax": "={{ $now.endOf('month').toISO() }}",
+        "options": {},
+        "timeMin": "={{ $now.startOf('month').toISO() }}"
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "30d7b5ed-d569-4e4e-9f25-7de25c21655c",
+      "name": "📆 Fetch This Month's Bookings from Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "U4a3NKSMT5HV1bJr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = $input.all();\nconst schedule = events\n  .filter(e => {\n    const summary = (e.json.summary || '').toLowerCase();\n    // Only include real bookings, skip Airbnb blocked/unavailable dates\n    return !summary.includes('not available') && \n           !summary.includes('blocked') && \n           !summary.includes('unavailable') &&\n           summary !== '';\n  })\n  .sort((a, b) => {\n    const startA = a.json.start.dateTime || a.json.start.date;\n    const startB = b.json.start.dateTime || b.json.start.date;\n    return new Date(startA) - new Date(startB);\n  })\n  .map(e => {\n    const endStr = e.json.end.dateTime || e.json.end.date;\n    const checkout = new Date(endStr);\n    const guestName = e.json.summary || 'Guest';\n    return `🧹 ${checkout.toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'})}: Clean after ${guestName} checkout (10am)`;\n  })\n  .join('\\n');\n\nif (!schedule) {\n  return [{json: { message: `*Bryson Road — ${new Date().toLocaleString('en-GB', {month:'long', year:'numeric'})}*\\n\\nNo cleanings scheduled this month. 🎉` }}];\n}\n\nreturn [{json: {\n  message: `*Bryson Road Cleaning Schedule — ${new Date().toLocaleString('en-GB', {month:'long', year:'numeric'})}*\\n\\n${schedule}\\n\\nPlease confirm you've seen this message.`\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "30875585-4f7e-4da5-9b88-111e1baa9d79",
+      "name": "✍️ Build Cleaning Schedule Message"
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "4a3c8014-7888-416b-bc3b-96953e339727",
+      "name": "📱 Send Monthly Schedule to Cleaner via Telegram",
+      "webhookId": "429f668f-a38f-4b92-80fb-9b9f7b975740",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        224
+      ],
+      "id": "9fc599e9-16bc-4b22-b60e-ac4a3d80e3eb",
+      "name": "🔄 Trigger: Check for New Bookings Every 2 Hours"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "n5s6ldu6ntj1jq6plmuuc8ve3odtpcoo@import.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "https://www.airbnb.co.uk/calendar/ical/1156227451993163925.ics?t=c929ed666ec84fe4880f3b2d333d31ff"
+        },
+        "timeMin": "={{ $now.toISO() }}",
+        "timeMax": "={{ $now.endOf('month').toISO() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        224
+      ],
+      "id": "cff9712a-cfde-4979-9a66-2d4135a5560d",
+      "name": "📆 Fetch Upcoming Bookings from Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "U4a3NKSMT5HV1bJr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        224
+      ],
+      "id": "413da8e2-7ca3-4d3a-b547-d5b459a9d0ae",
+      "name": "📋 Read Already-Notified Bookings from DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get calendar events\nconst calendarEvents = $(\"Get Upcoming Bookings\").all(); \n\n// 2. Get existing IDs from Sheets safely\nlet notified = [];\ntry {\n  const sheetData = $(\"Read Notified Bookings\").all();\n  notified = sheetData.map(row => row.json['ID'] || '');\n} catch (e) {\n  // If the node hasn't run yet or is empty, notified stays []\n  notified = [];\n}\n\n// 3. Filter for truly NEW events\nconst newBookings = calendarEvents.filter(event => {\n  const eventId = event.json.id;\n  // If the ID isn't in our sheet yet, it's new!\n  return !notified.includes(eventId);\n});\n\nreturn newBookings;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        224
+      ],
+      "id": "bf959914-3c40-45a8-8a78-dd5dde801976",
+      "name": "🔍 Filter Out Already-Known Bookings"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.id }}",
+            "Guest Name": "={{ $json.summary }}",
+            "Check-in": "={{ $json.start.date }}",
+            "Check-out": "={{ $json.end.date }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Guest Name",
+              "displayName": "Guest Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Check-in",
+              "displayName": "Check-in",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Check-out",
+              "displayName": "Check-out",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "12h Msg Sent",
+              "displayName": "12h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "24h Msg Sent",
+              "displayName": "24h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        832,
+        224
+      ],
+      "id": "b3b7ddea-1beb-44f3-8e11-0530853f38ba",
+      "name": "💾 Save New Booking to Google Sheets DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "=🚨 *New Booking Alert!*\n\nA new booking was just added for Bryson Road.\n\n👤 Guest: {{ $json['Guest Name'] || $json.summary }}\n📅 Check-in: {{ $json['Check-in'] || $json.start.date }}\n📅 Check-out: {{ $json['Check-out'] || $json.end.date }}\n\nPlease update your cleaning schedule!",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        224
+      ],
+      "id": "2db56f38-2777-416a-a634-a458686fc262",
+      "name": "🚨 Alert Cleaner of New Booking via Telegram",
+      "webhookId": "d938e6e3-a485-4035-8308-376502d07943",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📌 **Monthly Trigger**\nFires automatically on the 1st of every month at 8:00 AM.",
+        "height": 110,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -130
+      ],
+      "id": "note-fbwaflw0",
+      "name": "Note: 📅 Trigger: 1st of Month at 8AM"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Calendar Sync**\nPulls all Airbnb bookings for the current month from Google Calendar.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -130
+      ],
+      "id": "note-jb9dievv",
+      "name": "Note: 📆 Fetch This Month's Bookings from Calendar"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Message Formatter**\nConverts raw calendar data into a readable WhatsApp/Telegram message.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -130
+      ],
+      "id": "note-scudfk10",
+      "name": "Note: ✍️ Build Cleaning Schedule Message"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Telegram Notification**\nSends the formatted monthly schedule to the cleaner's Telegram chat.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -130
+      ],
+      "id": "note-mefskhmh",
+      "name": "Note: 📱 Send Monthly Schedule to Cleaner via Telegram"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Bi-Hourly Check**\nRuns every 2 hours to see if any new bookings arrived.",
+        "height": 110,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        94
+      ],
+      "id": "note-fnk4m5nb",
+      "name": "Note: 🔄 Trigger: Check for New Bookings Every 2 Hours"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Calendar Sync**\nGets upcoming events to check against our DB.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        94
+      ],
+      "id": "note-ww9aa7po",
+      "name": "Note: 📆 Fetch Upcoming Bookings from Calendar"
+    },
+    {
+      "parameters": {
+        "content": "📌 **DB Read**\nLoads bookings we've already notified the cleaner about.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        94
+      ],
+      "id": "note-6kmu85kr",
+      "name": "Note: 📋 Read Already-Notified Bookings from DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Filter**\nKeeps only new bookings that aren't in our DB yet.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        624,
+        94
+      ],
+      "id": "note-w4mki2gr",
+      "name": "Note: 🔍 Filter Out Already-Known Bookings"
+    },
+    {
+      "parameters": {
+        "content": "📌 **DB Save**\nLogs new bookings so we don't alert about them again.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        832,
+        94
+      ],
+      "id": "note-8hsjdmnr",
+      "name": "Note: 💾 Save New Booking to Google Sheets DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **New Booking Alert**\nSends instant ping to cleaner so they can update their schedule.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        94
+      ],
+      "id": "note-bcp8x0jf",
+      "name": "Note: 🚨 Alert Cleaner of New Booking via Telegram"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📅 Trigger: 1st of Month at 8AM": {
+      "main": [
+        [
+          {
+            "node": "📆 Fetch This Month's Bookings from Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📆 Fetch This Month's Bookings from Calendar": {
+      "main": [
+        [
+          {
+            "node": "✍️ Build Cleaning Schedule Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✍️ Build Cleaning Schedule Message": {
+      "main": [
+        [
+          {
+            "node": "📱 Send Monthly Schedule to Cleaner via Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Trigger: Check for New Bookings Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "📆 Fetch Upcoming Bookings from Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📆 Fetch Upcoming Bookings from Calendar": {
+      "main": [
+        [
+          {
+            "node": "📋 Read Already-Notified Bookings from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Read Already-Notified Bookings from DB": {
+      "main": [
+        [
+          {
+            "node": "🔍 Filter Out Already-Known Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Filter Out Already-Known Bookings": {
+      "main": [
+        [
+          {
+            "node": "💾 Save New Booking to Google Sheets DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Save New Booking to Google Sheets DB": {
+      "main": [
+        [
+          {
+            "node": "🚨 Alert Cleaner of New Booking via Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5d2d1c2c-9f38-4611-81dd-740ba5f601e4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "7peMFkcVm98d3JaB",
+  "tags": []
+}

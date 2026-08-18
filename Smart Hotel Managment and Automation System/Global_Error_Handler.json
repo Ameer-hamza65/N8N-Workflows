@@ -1,0 +1,126 @@
+{
+  "name": "Global Error Handler [NEW]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Global Error Handler\n\n🎯 **Purpose:** Catches any errors that occur in ALL other active workflows. If a workflow fails (e.g. API down, bad credentials), this workflow immediately sends a Telegram alert to the owner.\n\n🔄 **Runs:** Automatically whenever any active workflow errors out.\n\n⚠️ **Setup:** You MUST set the \"Error Workflow\" setting in each individual workflow's settings to point to this workflow.",
+        "height": 200,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [0, -320],
+      "typeVersion": 1,
+      "id": "err-note-overview",
+      "name": "📋 Error Handler Overview"
+    },
+    {
+      "parameters": {
+        "content": "⚠️ **Error Trigger**\nListens for execution failures across your n8n instance.",
+        "height": 110,
+        "width": 300,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [0, -100],
+      "typeVersion": 1,
+      "id": "err-note-01",
+      "name": "📌 Note: Error Trigger"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 20],
+      "id": "err-trigger",
+      "name": "⚠️ Trigger: Workflow Failed"
+    },
+    {
+      "parameters": {
+        "content": "✍️ **Format Error Message**\nExtracts the name of the workflow that failed and the specific error message.",
+        "height": 110,
+        "width": 300,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [240, -100],
+      "typeVersion": 1,
+      "id": "err-note-02",
+      "name": "📌 Note: Format Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "const execData = $json.execution;\nconst workflowName = $json.workflow.name;\nconst errorObj = execData.error || {};\nconst errorMessage = errorObj.message || 'Unknown error occurred';\nconst errorNode = errorObj.lastNodeExecuted || 'Unknown node';\n\nreturn [{\n  json: {\n    message: `🚨 *N8N WORKFLOW ERROR* 🚨\\n\\n*Workflow:* ${workflowName}\\n*Failed Node:* ${errorNode}\\n*Error:* ${errorMessage}\\n\\nPlease check your n8n dashboard to fix the issue.`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 20],
+      "id": "err-format",
+      "name": "✍️ Format Error Details"
+    },
+    {
+      "parameters": {
+        "content": "📱 **Send Owner Alert**\nInstantly notifies you on Telegram so you know immediately if an automation breaks.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [480, -100],
+      "typeVersion": 1,
+      "id": "err-note-03",
+      "name": "📌 Note: Telegram Alert"
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [480, 20],
+      "id": "err-telegram",
+      "name": "📱 Send Error Alert via Telegram",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⚠️ Trigger: Workflow Failed": {
+      "main": [
+        [
+          {
+            "node": "✍️ Format Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✍️ Format Error Details": {
+      "main": [
+        [
+          {
+            "node": "📱 Send Error Alert via Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "err-version-001",
+  "id": "GlobalErrorHandler001",
+  "tags": []
+}

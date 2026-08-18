@@ -1,0 +1,680 @@
+{
+  "name": "WF5 — Edinburgh Events Scout [FIXED + Annotated]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF5: Edinburgh Local Event Scout\n\n🎯 **Purpose:** Acts as your automated marketing researcher — finds local events that drive short-stay demand in Edinburgh, so you can adjust pricing or launch promotions ahead of time.\n\n🔄 **Runs:** Every Monday at 9:00 AM automatically\n\n✅ **What's been FIXED in this version:**\n• Added duplicate detection — won't log the same event twice\n• Added owner Telegram alert when new events are found\n• Improved search query for better results",
+        "height": 260,
+        "width": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        -380
+      ],
+      "typeVersion": 1,
+      "id": "abb9de9f-2a12-4555-b7eb-770f9820fe3f",
+      "name": "📋 WF5 Overview"
+    },
+    {
+      "parameters": {
+        "content": "⏰ **Weekly Schedule Trigger**\nFires automatically every Monday morning at 9:00 AM.\n💡 Starts the event scouting process at the beginning of each week so you have time to adjust pricing before the weekend.",
+        "height": 130,
+        "width": 300,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-01",
+      "name": "📌 Note: Weekly Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cdd7acf4-d87e-495a-ba02-1dedad9b8caf",
+      "name": "⏰ Trigger: Every Monday at 9AM"
+    },
+    {
+      "parameters": {
+        "content": "🔍 **Tavily AI Web Search**\nSearches the internet for confirmed upcoming events in Edinburgh (concerts, festivals, sports matches) for the next 4 weeks.\n💡 Tavily is an AI-powered search engine that returns structured results — much more reliable than raw Google scraping.",
+        "height": 140,
+        "width": 300,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        208,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-02",
+      "name": "📌 Note: Web Search"
+    },
+    {
+      "parameters": {
+        "query": "upcoming local events concerts festivals sports matches in Edinburgh next 4 weeks",
+        "options": {
+          "search_depth": "advanced",
+          "include_images": false
+        }
+      },
+      "type": "@tavily/n8n-nodes-tavily.tavily",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a6874792-01a3-452f-a5e2-6613f0cdfb5f",
+      "name": "🔍 Search Edinburgh Events via Tavily AI",
+      "credentials": {
+        "tavilyApi": {
+          "id": "NRrszdZ9bvsErQGD",
+          "name": "Tavily account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "✂️ **Split Search Results**\nThe Tavily search returns a single bundle of results. This node splits them into individual items so each can be processed separately by the AI in the next step.\n💡 Required to let the AI analyse each search result one by one.",
+        "height": 130,
+        "width": 300,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        416,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-03",
+      "name": "📌 Note: Split Results"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=results",
+        "include": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "997132a2-4950-429a-a620-86b8d39fc513",
+      "name": "✂️ Split Each Search Result Separately"
+    },
+    {
+      "parameters": {
+        "content": "🧠 **AI Event Extractor (Groq LLM)**\nSends each search result to the Groq AI (Llama 3.3 70B). The AI reads the web content and extracts structured event data (Name, Date, Venue, Link).\n💡 AI rules out vague listings and only keeps confirmed events with real dates and venues.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        624,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-04",
+      "name": "📌 Note: AI Extractor"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a data extraction assistant. I will provide you with web search results for upcoming events in Edinburgh. Your job is to extract specific, confirmed events (e.g., specific concerts, sports matches, or festivals).\n\nSTRICT RULES:\n\nIgnore generic event directories or aggregate pages.\n\nIgnore any event where the date or venue is \"TBD\" or unknown.\n\nYou must output ONLY a valid JSON array of objects.\n\nEach object MUST have exactly these four keys to match my database: \"Event Name\", \"Date\", \"Venue\", and \"Link\".\ntitle:{{ $json.results.title }}\ncontent:{{ $json.results.content }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        624,
+        0
+      ],
+      "id": "673ef0c6-440f-48f6-80e7-6ba9cc5717e9",
+      "name": "🤖 AI: Extract Structured Event Details"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        624,
+        208
+      ],
+      "id": "fd6ea2f9-c739-4d8b-8ec2-3988350a6f00",
+      "name": "🧠 LLM: Groq AI Model (Llama 3.3 70B)",
+      "credentials": {
+        "groqApi": {
+          "id": "Y0tJAxIUKhiuiuSi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🔧 **JSON Cleaner & Combiner**\nThe AI sometimes wraps JSON in markdown code blocks (```json ... ```). This node strips those out and combines all extracted events from all search results into a single clean list.\n💡 Handles AI formatting errors gracefully — bad outputs are skipped, good ones are kept.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1008,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-05",
+      "name": "📌 Note: JSON Cleaner"
+    },
+    {
+      "parameters": {
+        "jsCode": "let allEvents = [];\n\n// Loop through all items coming from the LLM Chain\nfor (const item of $input.all()) {\n  try {\n    // 1. Get the text and clean off the markdown tags\n    const cleanText = item.json.text.replace(\n      /```json|```/g, '').trim();\n    \n    // 2. Parse the string into actual JSON\n    const parsedEvents = JSON.parse(cleanText);\n    \n    // 3. If it is a valid array of events (and not empty []), add them to our master list\n    if (Array.isArray(parsedEvents) && parsedEvents.length > 0) {\n      allEvents = allEvents.concat(parsedEvents);\n    }\n  } catch (error) {\n    // If the LLM spits out bad formatting that breaks JSON.parse, just skip it and keep going\n    continue;\n  }\n}\n\n// Return the final combined list of real events\nreturn allEvents;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        0
+      ],
+      "id": "fbc87470-406a-4971-93f0-1b17c63102ff",
+      "name": "🔧 Clean & Combine All Extracted Events"
+    },
+    {
+      "parameters": {
+        "content": "📋 **Read Existing Events (for Duplicate Check)**\n[NEW] Reads all events already stored in the Edinburgh Events Google Sheet.\n💡 This data is used in the next step to prevent the same event being logged every week. Without this, duplicates would pile up in the sheet.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        416,
+        100
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-06",
+      "name": "📌 Note: Read Existing Events"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI",
+          "mode": "list",
+          "cachedResultName": "Airbnb_Edinburgh_Events",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        250
+      ],
+      "id": "aa11bb22-cc33-dd44-ee55-ff6677889900",
+      "name": "📋 Read Existing Events from Edinburgh DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🔍 **Duplicate Filter**\n[NEW] Compares newly found events against what's already in the database. Matches on Event Name + Date combination.\n💡 If an event is already in the sheet, it's skipped. Only genuinely new events pass through. Returns a special 'noNewEvents' flag if nothing new was found.",
+        "height": 150,
+        "width": 340,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1216,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-07",
+      "name": "📌 Note: Duplicate Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get new events from AI extraction\nconst newEvents = $('🔧 Clean & Combine All Extracted Events').all();\n\n// Get existing events from the Google Sheet\nconst existingEvents = $('📋 Read Existing Events from Edinburgh DB').all();\n\n// Build a set of existing event keys (Name + Date combo) for fast lookup\nconst existingKeys = new Set(\n  existingEvents.map(row => {\n    const name = (row.json['Event Name'] || '').toLowerCase().trim();\n    const date = (row.json['Date'] || '').toLowerCase().trim();\n    return `${name}|${date}`;\n  })\n);\n\n// Filter to only truly new events not already in the sheet\nconst uniqueNewEvents = newEvents.filter(event => {\n  const name = (event.json['Event Name'] || '').toLowerCase().trim();\n  const date = (event.json['Date'] || '').toLowerCase().trim();\n  const key = `${name}|${date}`;\n  return !existingKeys.has(key) && name.length > 2;\n});\n\nif (uniqueNewEvents.length === 0) {\n  // Return a sentinel item so downstream knows nothing new was found\n  return [{json: {newEventsCount: 0, events: [], noNewEvents: true}}];\n}\n\n// Add a count field so the Telegram message can use it\nreturn uniqueNewEvents.map(e => ({json: {...e.json, newEventsCount: uniqueNewEvents.length, noNewEvents: false}}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "bb22cc33-dd44-ee55-ff66-778899001122",
+      "name": "🔍 Filter: Keep Only Brand-New Events"
+    },
+    {
+      "parameters": {
+        "content": "❓ **New Events Gate**\n[NEW] Checks if any genuinely new events were found this week.\n💡 If there's nothing new (all events already in the DB), the workflow stops here to avoid sending an empty Telegram alert or logging duplicate rows.",
+        "height": 130,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1424,
+        -140
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-08",
+      "name": "📌 Note: Are There New Events?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cc33dd44-ee55-ff66-7788-990011223344",
+              "leftValue": "={{ $json.noNewEvents }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "cc33dd44-ee55-ff66-7788-112233445566",
+      "name": "❓ Are There New Events This Week?"
+    },
+    {
+      "parameters": {
+        "content": "💾 **Save New Events to Sheet**\nAppends each new event (Name, Date, Venue, Link) as a new row in the Edinburgh Events Google Sheet.\n💡 This serves as the permanent record of all discovered events. The duplicate filter above reads from this same sheet next week.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1632,
+        -220
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-09",
+      "name": "📌 Note: Log New Events"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI",
+          "mode": "list",
+          "cachedResultName": "Airbnb_Edinburgh_Events",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1oEYTKio0NhPLP-7tTW7Oqu88_zlI-Fb5vVrYo-BUJWI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Event Name": "={{ $json['Event Name'] }}",
+            "Date": "={{ $json.Date }}",
+            "Venue": "={{ $json['Venue'] }}",
+            "Link": "={{ $json.Link }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Event Name",
+              "displayName": "Event Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Venue",
+              "displayName": "Venue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1632,
+        -80
+      ],
+      "id": "7f59b32a-ede8-4b25-b0bf-6e5bcae8e659",
+      "name": "💾 Save New Events to Edinburgh DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "✍️ **Build Telegram Summary**\n[NEW] Formats all newly found events into a clean, readable Telegram message with event name, date, and venue listed.\n💡 Aggregates all items into a single message so the owner gets one neat summary, not multiple individual pings.",
+        "height": 130,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1632,
+        -20
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-10",
+      "name": "📌 Note: Build Alert Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all events into one Telegram summary message\nconst items = $input.all();\nconst count = items[0]?.json?.newEventsCount || items.length;\n\nconst eventList = items\n  .map((item, i) => {\n    const name = item.json['Event Name'] || 'Unknown Event';\n    const date = item.json['Date'] || 'TBC';\n    const venue = item.json['Venue'] || 'TBC';\n    return `${i + 1}. *${name}*\\n   📅 ${date} | 📍 ${venue}`;\n  })\n  .join('\\n\\n');\n\nreturn [{\n  json: {\n    message: `🎪 *${count} New Edinburgh Event(s) Found!*\\n\\n${eventList}\\n\\n💡 Consider adjusting your Airbnb pricing or running a promotion for these dates. Check the full list in your events spreadsheet.`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        80
+      ],
+      "id": "dd44ee55-ff66-7788-9900-223344556677",
+      "name": "✍️ Build Owner Alert Summary Message"
+    },
+    {
+      "parameters": {
+        "content": "📱 **Owner Telegram Alert**\n[NEW] Sends the formatted event summary to the owner's Telegram.\n💡 Owner receives this every Monday when new events are found. The message suggests considering pricing adjustments or promotions to capture demand from event attendees.",
+        "height": 140,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1840,
+        -20
+      ],
+      "typeVersion": 1,
+      "id": "note-wf5-11",
+      "name": "📌 Note: Owner Alert"
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1840,
+        80
+      ],
+      "id": "ee55ff66-7788-9900-1122-334455667788",
+      "name": "📱 Alert Owner via Telegram — New Events Found",
+      "webhookId": "55550001-aaaa-bbbb-cccc-ddddeeeeffffa",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "wait"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1066,
+        0
+      ],
+      "id": "merge-node-wait-1234",
+      "name": "🚦 Merge: Wait for Both"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Merge (Wait)**\nWaits for both the AI extraction and the DB read to finish before letting the Filter node run.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1066,
+        -130
+      ],
+      "id": "note-merge-1234",
+      "name": "Note: Merge Wait"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⏰ Trigger: Every Monday at 9AM": {
+      "main": [
+        [
+          {
+            "node": "🔍 Search Edinburgh Events via Tavily AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "📋 Read Existing Events from Edinburgh DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Search Edinburgh Events via Tavily AI": {
+      "main": [
+        [
+          {
+            "node": "✂️ Split Each Search Result Separately",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✂️ Split Each Search Result Separately": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI: Extract Structured Event Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI: Extract Structured Event Details": {
+      "main": [
+        [
+          {
+            "node": "🔧 Clean & Combine All Extracted Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 LLM: Groq AI Model (Llama 3.3 70B)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 AI: Extract Structured Event Details",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Clean & Combine All Extracted Events": {
+      "main": [
+        [
+          {
+            "node": "🚦 Merge: Wait for Both",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Read Existing Events from Edinburgh DB": {
+      "main": [
+        [
+          {
+            "node": "🚦 Merge: Wait for Both",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "🔍 Filter: Keep Only Brand-New Events": {
+      "main": [
+        [
+          {
+            "node": "❓ Are There New Events This Week?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Are There New Events This Week?": {
+      "main": [
+        [
+          {
+            "node": "💾 Save New Events to Edinburgh DB",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "✍️ Build Owner Alert Summary Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "✍️ Build Owner Alert Summary Message": {
+      "main": [
+        [
+          {
+            "node": "📱 Alert Owner via Telegram — New Events Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚦 Merge: Wait for Both": {
+      "main": [
+        [
+          {
+            "node": "🔍 Filter: Keep Only Brand-New Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a519ca8b-88f8-44d2-9ecd-2d13916c0fd9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "bpLDMqKV8OxoYFpK",
+  "tags": []
+}

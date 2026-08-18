@@ -1,0 +1,1049 @@
+{
+  "name": "WF4 — Checkout day cleaner reminder [FIXED + Annotated]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF4: The \"Double-Check\" Escalation System\nHow it works:\n\nMorning Alert: At 8:00 AM, the system identifies a checkout and pings the cleaner. It simultaneously sets a \"Digital Alarm\" in Google Sheets by setting Awaiting Response to TRUE.\n\nThe Silent Listener (Bottom Branch): This workflow sits quietly in the background. As soon as the cleaner replies \"OK\", it instantly flips that Google Sheets status to FALSE.\n\nThe Escalation Check: After a 2-hour delay, the main workflow \"wakes up\" and checks the status of that Digital Alarm.\n\nIf FALSE: The system knows the cleaner responded. It does nothing and stops.\n\nIf TRUE: The system realizes the cleaner is silent. It triggers the Emergency Voice Call to ensure the apartment is cleaned before the next guest arrives at 3:00 PM.",
+        "height": 256,
+        "width": 832
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "378347dd-2402-4a46-b23d-267512b86feb",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": " 0 8 * * * "
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ebd686dd-4e62-4948-9a3c-24a71a68f2a5",
+      "name": "⏰ Trigger: Every Day at 8:00 AM"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "n5s6ldu6ntj1jq6plmuuc8ve3odtpcoo@import.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "https://www.airbnb.co.uk/calendar/ical/1156227451993163925.ics?t=c929ed666ec84fe4880f3b2d333d31ff"
+        },
+        "timeMin": "={{ $today.startOf('day') }}",
+        "timeMax": "={{ $today.endOf('day') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "beacb340-447b-492b-a2b7-730dccd30a6b",
+      "name": "📆 Check if Anyone Checks Out Today",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "U4a3NKSMT5HV1bJr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6aa10216-511d-442a-8bb2-f0e30ed4cf04",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        0
+      ],
+      "id": "d521561c-3ecf-47ba-a518-d70a082caea1",
+      "name": "❓ Is There a Checkout Today?"
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "Good morning! Bryson Road checkout is today. Please clean the apartment today. Reply 'OK' to confirm.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        -16
+      ],
+      "id": "8981f659-ded5-4bb5-8b2f-a4f0b04624a8",
+      "name": "📱 Send Morning Cleaning Reminder to Cleaner",
+      "webhookId": "b026dc5a-047b-4ac9-a2fd-1f623a14aad1",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Reminder Timestamp": "={{ $now }}",
+            "Awaiting Response": "True",
+            "ID": "={{ $('Find Today\\'s Checkouts').item.json.id }}"
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Guest Name",
+              "displayName": "Guest Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Check-in",
+              "displayName": "Check-in",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Check-out",
+              "displayName": "Check-out",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "12h Msg Sent",
+              "displayName": "12h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "24h Msg Sent",
+              "displayName": "24h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Reminder Timestamp",
+              "displayName": "Reminder Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Awaiting Response",
+              "displayName": "Awaiting Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        912,
+        0
+      ],
+      "id": "1601b865-e1b1-417c-8ad4-4687aa102acf",
+      "name": "💾 Set 'Awaiting Reply' Flag in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "66a9fb66-a7b2-42ad-a201-aea19882a72a",
+      "name": "⏳ Wait 2 Hours for Cleaner Confirmation",
+      "webhookId": "4ba9a163-aaf8-4094-8c57-c40ebb0a5799"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1239132d-93a1-4229-baa4-29634434a4dc",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "f2fbe1ef-e19e-4afc-84e9-ff8fcadabdd5",
+      "name": "❓ Did Cleaner Reply 'OK'?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot8771594424:AAFPTcAcNCud7ptK-qhey-wE5roUPsMuSIE/sendVoice",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "6123500653"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "voice",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2280,
+        -16
+      ],
+      "id": "cfae4494-f837-4ae0-9a46-1343db72f266",
+      "name": "📞 Send Voice Alert to Cleaner via Telegram"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cleaner-response",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -32,
+        256
+      ],
+      "id": "3602d2bc-a941-475f-a734-33fdb8aa0a94",
+      "name": "👂 Listen for Cleaner's 'OK' Reply (Webhook)",
+      "webhookId": "ca1c6a16-6f93-4d20-ac54-a06e774d6ee7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4a228fa5-3e77-4b15-a80a-b806a73bf4b1",
+              "leftValue": "={{ $json.body.message.text }}",
+              "rightValue": "ok",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        272,
+        256
+      ],
+      "id": "f8b775ee-d1e3-4e1e-b706-658f51443a72",
+      "name": "❓ Did Cleaner Say 'OK'?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Awaiting Response",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        240
+      ],
+      "id": "33035d10-ad07-405f-93f9-280156a6e180",
+      "name": "🔍 Find Checkout Row in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $json.ID }}",
+            "Awaiting Response": "FALSE"
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Guest Name",
+              "displayName": "Guest Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Check-in",
+              "displayName": "Check-in",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Check-out",
+              "displayName": "Check-out",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "12h Msg Sent",
+              "displayName": "12h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "24h Msg Sent",
+              "displayName": "24h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Reminder Timestamp",
+              "displayName": "Reminder Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Awaiting Response",
+              "displayName": "Awaiting Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        784,
+        240
+      ],
+      "id": "8ff17600-2130-4119-be5d-18186d1bd396",
+      "name": "✅ Mark Cleaner as Confirmed in DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "ID",
+              "lookupValue": "={{ $json.ID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1360,
+        0
+      ],
+      "id": "659b83c5-7963-4150-bd69-d21d85812186",
+      "name": "📋 Re-read Cleaner Response Status from DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1JSMZvMJ7O1jROWKr6OSJjpryjqhOl4C3",
+          "mode": "list",
+          "cachedResultName": "file_example_MP3_700KB.ogg",
+          "cachedResultUrl": "https://drive.google.com/file/d/1JSMZvMJ7O1jROWKr6OSJjpryjqhOl4C3/view?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2088,
+        0
+      ],
+      "id": "160b7da5-9320-4cfd-81a9-fe52e789642a",
+      "name": "🎙️ Download Emergency Voice Message",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ZbrF8B8NXGebLXzH",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "🚨 *EMERGENCY - URGENT CLEANING REQUIRED* 🚨\n\nBryson Road apartment checkout is TODAY. You have NOT confirmed cleaning.\n\nGuests arrive at 3:00 PM. Please clean the apartment IMMEDIATELY and reply 'OK' to this message.\n\nIf you cannot clean today, call the owner NOW.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1888,
+        0
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "🚨 Send URGENT Text to Cleaner",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📌 **Daily Check**\nStarts the checkout reminder flow every morning at 8.",
+        "height": 110,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -130
+      ],
+      "id": "note-tmxubpck",
+      "name": "Note: ⏰ Trigger: Every Day at 8:00 AM"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Fetch Checkouts**\nQueries the calendar to see if there is a checkout today.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -130
+      ],
+      "id": "note-nmapxm5l",
+      "name": "Note: 📆 Check if Anyone Checks Out Today"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Checkout Gate**\nStops if no one is checking out today.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -130
+      ],
+      "id": "note-77s0zaxj",
+      "name": "Note: ❓ Is There a Checkout Today?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Morning Reminder**\nSends the initial 8AM ping to the cleaner on Telegram.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -146
+      ],
+      "id": "note-qiqn79zs",
+      "name": "Note: 📱 Send Morning Cleaning Reminder to Cleaner"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Set Flag**\nMarks that we are waiting for the cleaner to say 'OK'.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -130
+      ],
+      "id": "note-mz8gmlo1",
+      "name": "Note: 💾 Set 'Awaiting Reply' Flag in Google Sheets"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Wait Timer**\nPauses the workflow for 2 hours (until 10AM).",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -130
+      ],
+      "id": "note-muayqfdt",
+      "name": "Note: ⏳ Wait 2 Hours for Cleaner Confirmation"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Check DB**\nChecks the DB flag again after the 2 hours is up.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        -130
+      ],
+      "id": "note-ih6pf8y7",
+      "name": "Note: 📋 Re-read Cleaner Response Status from DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Status Check**\nIf flag is still True, cleaner never replied -> Emergency.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -130
+      ],
+      "id": "note-8jo5r6bj",
+      "name": "Note: ❓ Did Cleaner Reply 'OK'?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Emergency Text**\nSends a frantic text to the cleaner.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        -130
+      ],
+      "id": "note-9zj2bu6t",
+      "name": "Note: 🚨 Send URGENT Text to Cleaner"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Load Audio**\nLoads the pre-recorded voice message file.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2088,
+        -130
+      ],
+      "id": "note-ojwb6nh8",
+      "name": "Note: 🎙️ Download Emergency Voice Message"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Voice Call**\nCalls the cleaner with the voice message.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2280,
+        -146
+      ],
+      "id": "note-a3dnwccw",
+      "name": "Note: 📞 Send Voice Alert to Cleaner via Telegram"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Reply Listener**\nListens 24/7 for the cleaner's reply via Webhook.",
+        "height": 110,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        126
+      ],
+      "id": "note-i3e61k0u",
+      "name": "Note: 👂 Listen for Cleaner's 'OK' Reply (Webhook)"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Check Message**\nValidates the cleaner actually typed 'OK'.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        126
+      ],
+      "id": "note-zqxvei3n",
+      "name": "Note: ❓ Did Cleaner Say 'OK'?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Lookup Booking**\nFinds the specific booking for today's checkout.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        110
+      ],
+      "id": "note-ptvkl1w8",
+      "name": "Note: 🔍 Find Checkout Row in Google Sheets"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Clear Flag**\nMarks 'Awaiting Reply' as FALSE so emergency doesn't trigger.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        784,
+        110
+      ],
+      "id": "note-4nb48pbx",
+      "name": "Note: ✅ Mark Cleaner as Confirmed in DB"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⏰ Trigger: Every Day at 8:00 AM": {
+      "main": [
+        [
+          {
+            "node": "📆 Check if Anyone Checks Out Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📆 Check if Anyone Checks Out Today": {
+      "main": [
+        [
+          {
+            "node": "❓ Is There a Checkout Today?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Is There a Checkout Today?": {
+      "main": [
+        [
+          {
+            "node": "📱 Send Morning Cleaning Reminder to Cleaner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "📱 Send Morning Cleaning Reminder to Cleaner": {
+      "main": [
+        [
+          {
+            "node": "💾 Set 'Awaiting Reply' Flag in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Set 'Awaiting Reply' Flag in Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "⏳ Wait 2 Hours for Cleaner Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Wait 2 Hours for Cleaner Confirmation": {
+      "main": [
+        [
+          {
+            "node": "📋 Re-read Cleaner Response Status from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Re-read Cleaner Response Status from DB": {
+      "main": [
+        [
+          {
+            "node": "❓ Did Cleaner Reply 'OK'?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Did Cleaner Reply 'OK'?": {
+      "main": [
+        [
+          {
+            "node": "🚨 Send URGENT Text to Cleaner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "🚨 Send URGENT Text to Cleaner": {
+      "main": [
+        [
+          {
+            "node": "🎙️ Download Emergency Voice Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎙️ Download Emergency Voice Message": {
+      "main": [
+        [
+          {
+            "node": "📞 Send Voice Alert to Cleaner via Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👂 Listen for Cleaner's 'OK' Reply (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "❓ Did Cleaner Say 'OK'?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Did Cleaner Say 'OK'?": {
+      "main": [
+        [
+          {
+            "node": "🔍 Find Checkout Row in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Find Checkout Row in Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "✅ Mark Cleaner as Confirmed in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a638e56b-e884-452d-8d7d-edae76aa29c8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "3BdaPbRI17kkMq7A",
+  "tags": []
+}

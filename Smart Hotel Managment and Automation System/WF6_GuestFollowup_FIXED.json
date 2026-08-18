@@ -1,0 +1,896 @@
+{
+  "name": "WF6 — Guest Check-in Follow-up Messages [FIXED + Annotated]",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF6: Automated Guest Welfare Checks\nPurpose: Provides 5-star hospitality without manual effort.\nTriggers: Runs hourly in the background.\nActions:\n\nCalculates the exact number of hours since a guest checked in.\n\nAt exactly 12 hours, sends a \"Settling in well?\" email.\n\nAt exactly 24 hours, sends a \"Need any consumables?\" email.\n\nUpdates the database so guests are never double-texted.",
+        "height": 208,
+        "width": 464
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        64,
+        -368
+      ],
+      "typeVersion": 1,
+      "id": "e80db1cb-23b4-4a1f-ae0c-6a291c39f564",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "⏰ **Hourly Watchdog**\nRuns automatically every hour, 24/7. Checks if any guests who checked in recently are due for a welfare message. Kicks off the whole follow-up chain.",
+        "height": 120,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -162
+      ],
+      "id": "note-wf6-01",
+      "name": "📌 Note: Hourly Trigger"
+    },
+    {
+      "parameters": {
+        "content": "📆 **Calendar Lookup**\nFetches all Airbnb bookings from the last 48 hours via Google Calendar iCal sync. This gives us the list of guests currently staying who may need a follow-up message.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -162
+      ],
+      "id": "note-wf6-02",
+      "name": "📌 Note: Fetch Check-ins"
+    },
+    {
+      "parameters": {
+        "content": "📋 **Sent Message History**\nReads the Google Sheets DB to check which guests already received the 12h and 24h messages. This is what prevents the same email from being sent twice to the same guest.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -162
+      ],
+      "id": "note-wf6-03",
+      "name": "📌 Note: Message History"
+    },
+    {
+      "parameters": {
+        "content": "📧 **Guest Email Lookup**\nAirbnb doesn't share guest emails via iCal. This node reads the 'Guest Email' column that the host manually adds to the DB. Also tries to extract email from the calendar event description as a fallback.",
+        "height": 140,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -2
+      ],
+      "id": "note-wf6-04",
+      "name": "📌 Note: Email Lookup"
+    },
+    {
+      "parameters": {
+        "content": "🧠 **Time Calculator & Email Finder**\nCore logic node. Calculates exactly how many hours have passed since each guest checked in. Opens the 12h window (hours 12-13) and 24h window (hours 24-25). Skips guests with no email found.",
+        "height": 140,
+        "width": 340,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -162
+      ],
+      "id": "note-wf6-05",
+      "name": "📌 Note: Hours Calculator"
+    },
+    {
+      "parameters": {
+        "content": "❓ **Message Gate**\nIf no guests are in the 12h or 24h timing window right now, the workflow stops here — nothing to do. Only passes through guests who actually need a message sent.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -162
+      ],
+      "id": "note-wf6-06",
+      "name": "📌 Note: Message Due Gate"
+    },
+    {
+      "parameters": {
+        "content": "🔀 **Message Router**\nSends each guest to the correct email — either the 12-hour welfare check ('settling in?') or the 24-hour supplies check ('need more toilet paper?'). Each guest goes to exactly one branch.",
+        "height": 120,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -162
+      ],
+      "id": "note-wf6-07",
+      "name": "📌 Note: 12h vs 24h Router"
+    },
+    {
+      "parameters": {
+        "content": "📧 **12-Hour Welfare Email**\nSent exactly 12 hours after check-in (e.g., at 3 AM if guest arrived at 3 PM). A warm, friendly 'Are you settling in well?' message. Sent only ONCE per guest stay.",
+        "height": 120,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -258
+      ],
+      "id": "note-wf6-08",
+      "name": "📌 Note: 12h Email Send"
+    },
+    {
+      "parameters": {
+        "content": "📧 **24-Hour Supplies Check Email**\nSent exactly 24 hours after check-in. Asks if the guest has enough toilet paper, hand wash, body wash, etc. Shows the host cares about their comfort. Sent only ONCE per guest.",
+        "height": 120,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -66
+      ],
+      "id": "note-wf6-09",
+      "name": "📌 Note: 24h Email Send"
+    },
+    {
+      "parameters": {
+        "content": "💾 **Update 12h Flag Only**\nSets ONLY the '12h Msg Sent' column to TRUE. Critically, this does NOT touch the '24h Msg Sent' flag — ensuring the 24-hour email will still go out later as scheduled.",
+        "height": 130,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -258
+      ],
+      "id": "note-wf6-10",
+      "name": "📌 Note: Mark 12h Sent"
+    },
+    {
+      "parameters": {
+        "content": "💾 **Update 24h Flag Only**\nSets ONLY the '24h Msg Sent' column to TRUE. This prevents the 24h email from firing again on the next hourly check. The two flags are updated separately to avoid the bug where both get set at once.",
+        "height": 130,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -66
+      ],
+      "id": "note-wf6-11",
+      "name": "📌 Note: Mark 24h Sent"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        -32
+      ],
+      "id": "fb5d2793-6517-4540-9d78-cf6ebb43ff98",
+      "name": "⏰ Trigger: Run Hourly to Check Guest Message Timing"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "n5s6ldu6ntj1jq6plmuuc8ve3odtpcoo@import.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "https://www.airbnb.co.uk/calendar/ical/1156227451993163925.ics?t=c929ed666ec84fe4880f3b2d333d31ff"
+        },
+        "timeMin": "={{ $now.minus({ days: 2 }) }}",
+        "timeMax": "={{ $now }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        -32
+      ],
+      "id": "0f92d8b8-5f3f-4f4a-ad42-f8328718324c",
+      "name": "📆 Fetch Guests Who Checked In (Last 48 Hours)",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "U4a3NKSMT5HV1bJr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        -32
+      ],
+      "id": "0c1a593b-4311-4f2f-abb4-4d22311d44ca",
+      "name": "📋 Read Message Status from Google Sheets DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        128
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-123456789abc",
+      "name": "📧 Lookup Guest Email Address from DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Grab the Google Sheet data\nconst sheetRows = $('📋 Read Message Status from Google Sheets DB').all();\nconst emailRows = $('📧 Lookup Guest Email Address from DB').all();\n\n// 2. Grab the Google Calendar data from the earlier node\nconst calendarEvents = $('📆 Fetch Guests Who Checked In (Last 48 Hours)').all();\n\nconst toSend = [];\n\nfor (const event of calendarEvents) {\n  const checkInDate = event.json.start.dateTime || event.json.start.date;\n  if (!checkInDate) continue;\n\n  const checkIn = new Date(checkInDate);\n  if (!event.json.start.dateTime) {\n    checkIn.setHours(15, 0, 0);\n  }\n\n  const matchingRow = sheetRows.find(row => row.json.ID === event.json.id);\n  const emailRow = emailRows.find(row => row.json.ID === event.json.id);\n\n  let guestEmail = null;\n  if (emailRow && emailRow.json['Guest Email']) {\n    guestEmail = emailRow.json['Guest Email'];\n  } else if (event.json.description) {\n    const emailMatch = event.json.description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/);\n    if (emailMatch) guestEmail = emailMatch[0];\n  } else if (event.json.creator && event.json.creator.email && !event.json.creator.email.includes('airbnb')) {\n    guestEmail = event.json.creator.email;\n  }\n\n  if (!guestEmail) continue;\n\n  const msg12Sent = matchingRow ? (matchingRow.json['12h Msg Sent'] === true || matchingRow.json['12h Msg Sent'] === 'TRUE') : false;\n  const msg24Sent = matchingRow ? (matchingRow.json['24h Msg Sent'] === true || matchingRow.json['24h Msg Sent'] === 'TRUE') : false;\n\n  const now = new Date();\n  const hoursElapsed = (now - checkIn) / 3600000;\n\n  if (hoursElapsed >= 12 && hoursElapsed < 13 && !msg12Sent) {\n    toSend.push({...event.json, msgType: '12h', guestEmail});\n  }\n\n  if (hoursElapsed >= 24 && hoursElapsed < 25 && !msg24Sent) {\n    toSend.push({...event.json, msgType: '24h', guestEmail});\n  }\n}\n\nreturn toSend.map(t => ({json: t}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -32
+      ],
+      "id": "fcfd5915-bf9b-45b2-a040-188ba04c4334",
+      "name": "🧠 Calculate Hours Since Check-in & Find Email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5cf0a85a-9326-4c0c-acad-9e9eb3d67daa",
+              "leftValue": "={{ $json.msgType }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -32
+      ],
+      "id": "ecb0c762-324c-4c70-b92d-b14ef9e49184",
+      "name": "❓ Is a Message Due to Be Sent Now?"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.msgType }}",
+                    "rightValue": "12h",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "203ed7a1-883d-469b-b3c1-8c2f510692c7"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "19b2ef1c-e28b-480c-9805-d47ff6a4a87b",
+                    "leftValue": "={{ $json.msgType }}",
+                    "rightValue": "24h",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        -32
+      ],
+      "id": "2b0426db-901b-4b83-812e-9c7b3f00e4f1",
+      "name": "🔀 Route: 12-Hour or 24-Hour Message?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.guestEmail }}",
+        "subject": "How is your stay at Bryson Road?",
+        "emailType": "text",
+        "message": "Hi there, Hope you're settling in well at the Bryson Road apartment! If there's anything you need or any questions, please don't hesitate to message us. Have a wonderful time in Edinburgh! Warm regards",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -128
+      ],
+      "id": "82f17342-9796-4fd0-be48-3af32beaf57d",
+      "name": "📧 Send 12-Hour 'Settling In?' Email to Guest",
+      "webhookId": "37432927-9cc4-4c46-932f-288ed58f337c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.guestEmail }}",
+        "subject": "Quick check-in — Bryson Road apartment",
+        "emailType": "text",
+        "message": "Hi there, Just checking in do you have sufficient toilet paper, hand wash, and body wash in the apartment? If you need anything topped up, please let us know and we'll arrange it quickly. Hope Edinburgh is treating you well! Warm regards",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        64
+      ],
+      "id": "a98024b7-c88f-47f8-92fb-f5f716031c0c",
+      "name": "📧 Send 24-Hour 'Need Supplies?' Email to Guest",
+      "webhookId": "37432927-9cc4-4c46-932f-288ed58f337c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('🔀 Route: 12-Hour or 24-Hour Message?').item.json.id }}",
+            "12h Msg Sent": "TRUE"
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "12h Msg Sent",
+              "displayName": "12h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "24h Msg Sent",
+              "displayName": "24h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1568,
+        -128
+      ],
+      "id": "b2c3d4e5-f6a7-8901-bcde-234567890bcd",
+      "name": "💾 Mark 12h Email as Sent in DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ $('🔀 Route: 12-Hour or 24-Hour Message?').item.json.id }}",
+            "24h Msg Sent": "TRUE"
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "12h Msg Sent",
+              "displayName": "12h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "24h Msg Sent",
+              "displayName": "24h Msg Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1568,
+        64
+      ],
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901cde",
+      "name": "💾 Mark 24h Email as Sent in DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📌 **Hourly Watchdog**\nRuns automatically every hour, 24/7. Checks if any guests who checked in recently are due for a welfare message.",
+        "height": 120,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -162
+      ],
+      "id": "note-kpeznx7j",
+      "name": "Note: ⏰ Trigger: Run Hourly to Check Guest Message Timing"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Calendar Lookup**\nFetches all Airbnb bookings from the last 48 hours via Google Calendar iCal sync.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -162
+      ],
+      "id": "note-u020qrqm",
+      "name": "Note: 📆 Fetch Guests Who Checked In (Last 48 Hours)"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Sent Message History**\nReads the Google Sheets DB to check which guests already received the messages.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -162
+      ],
+      "id": "note-7b4037b5",
+      "name": "Note: 📋 Read Message Status from Google Sheets DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Guest Email Lookup**\nAirbnb doesn't share guest emails via iCal. This reads the 'Guest Email' column manually added by host.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -2
+      ],
+      "id": "note-2guxoiyu",
+      "name": "Note: 📧 Lookup Guest Email Address from DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Message Gate**\nIf no guests are in the 12h or 24h timing window right now, workflow stops here.",
+        "height": 120,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -162
+      ],
+      "id": "note-2wfypl6s",
+      "name": "Note: ❓ Is a Message Due to Be Sent Now?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Message Router**\nRoutes to 12h or 24h email.",
+        "height": 120,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -162
+      ],
+      "id": "note-onc5kvdc",
+      "name": "Note: 🔀 Route: 12-Hour or 24-Hour Message?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **12-Hour Welfare Email**\nSent exactly 12 hours after check-in. A warm, friendly message.",
+        "height": 120,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -258
+      ],
+      "id": "note-8h2mu8rq",
+      "name": "Note: 📧 Send 12-Hour 'Settling In?' Email to Guest"
+    },
+    {
+      "parameters": {
+        "content": "📌 **24-Hour Supplies Check Email**\nSent exactly 24 hours after check-in. Asks about supplies.",
+        "height": 120,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        -66
+      ],
+      "id": "note-wzoxkucy",
+      "name": "Note: 📧 Send 24-Hour 'Need Supplies?' Email to Guest"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Update 12h Flag Only**\nSets ONLY the '12h Msg Sent' column to TRUE.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -258
+      ],
+      "id": "note-aht1dfa5",
+      "name": "Note: 💾 Mark 12h Email as Sent in DB"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Update 24h Flag Only**\nSets ONLY the '24h Msg Sent' column to TRUE.",
+        "height": 120,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        -66
+      ],
+      "id": "note-qfrx9ced",
+      "name": "Note: 💾 Mark 24h Email as Sent in DB"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "⏰ Trigger: Run Hourly to Check Guest Message Timing": {
+      "main": [
+        [
+          {
+            "node": "📆 Fetch Guests Who Checked In (Last 48 Hours)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📆 Fetch Guests Who Checked In (Last 48 Hours)": {
+      "main": [
+        [
+          {
+            "node": "📋 Read Message Status from Google Sheets DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Read Message Status from Google Sheets DB": {
+      "main": [
+        [
+          {
+            "node": "📧 Lookup Guest Email Address from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Lookup Guest Email Address from DB": {
+      "main": [
+        [
+          {
+            "node": "🧠 Calculate Hours Since Check-in & Find Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Calculate Hours Since Check-in & Find Email": {
+      "main": [
+        [
+          {
+            "node": "❓ Is a Message Due to Be Sent Now?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Is a Message Due to Be Sent Now?": {
+      "main": [
+        [
+          {
+            "node": "🔀 Route: 12-Hour or 24-Hour Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Route: 12-Hour or 24-Hour Message?": {
+      "main": [
+        [
+          {
+            "node": "📧 Send 12-Hour 'Settling In?' Email to Guest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📧 Send 24-Hour 'Need Supplies?' Email to Guest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Send 12-Hour 'Settling In?' Email to Guest": {
+      "main": [
+        [
+          {
+            "node": "💾 Mark 12h Email as Sent in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Send 24-Hour 'Need Supplies?' Email to Guest": {
+      "main": [
+        [
+          {
+            "node": "💾 Mark 24h Email as Sent in DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e519ff7d-4159-4415-9602-d2206b608629",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "UmP51hTk6Fk39mY5",
+  "tags": []
+}

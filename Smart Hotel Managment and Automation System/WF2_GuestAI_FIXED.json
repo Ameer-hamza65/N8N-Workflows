@@ -1,0 +1,1042 @@
+{
+  "name": "WF2 — AI Guest Concierge [FIXED + Annotated]",
+  "nodes": [
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Use this tool to look up house rules and guest questions from the FAQ sheet.",
+        "documentId": {
+          "__rl": true,
+          "value": "1NDQg_uFDT2k3wB4YIqbePHY1qhVV_dyxodnBhbY886g",
+          "mode": "list",
+          "cachedResultName": "TEST_Airbnb_FAQ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NDQg_uFDT2k3wB4YIqbePHY1qhVV_dyxodnBhbY886g/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NDQg_uFDT2k3wB4YIqbePHY1qhVV_dyxodnBhbY886g/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1584,
+        96
+      ],
+      "id": "a9930b7c-97de-4520-95c6-05057604010c",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        80
+      ],
+      "id": "c11fcafe-b230-4261-899a-9de3d6543af2",
+      "name": "🧠 LLM: Groq AI Model (FAQ Agent)",
+      "credentials": {
+        "groqApi": {
+          "id": "Y0tJAxIUKhiuiuSi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replace with keys from your image_88b1f5.png\nconst clientId = 'dfa3na7ggrtw7cwt9syk'; \nconst secret = '52d675645fb0443c92abbb6d4138984a';\nconst timestamp = Date.now().toString();\n\n// The SHA256 hash of an empty string is always this exact value:\nconst emptyBodyHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';\nconst stringToSign = 'GET\\n' + emptyBodyHash + '\\n\\n/v1.0/token?grant_type=1';\nconst signStr = clientId + timestamp + stringToSign;\n\nreturn [{\n  json: {\n    clientId: clientId,\n    secret: secret,\n    timestamp: timestamp,\n    signStr: signStr\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        -320
+      ],
+      "id": "77f49a64-3f14-49c2-9555-a0f13af9f6c9",
+      "name": "🔐 Tuya Auth: Prepare Login Signature"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "value": "={{ $json.signStr }}"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -320
+      ],
+      "id": "294fbf28-cb76-45e0-a320-4c01fe41adc4",
+      "name": "🔐 Tuya Auth: Hash the Signature",
+      "credentials": {
+        "crypto": {
+          "id": "7jv5LaG4OqgU57Xd",
+          "name": "Crypto account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://openapi.tuyaeu.com/v1.0/token?grant_type=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $('Prepare Login Auth').item.json.clientId }}"
+            },
+            {
+              "name": "sign",
+              "value": "={{ $('Hash Login Sign').item.json.data.toUpperCase() }}"
+            },
+            {
+              "name": "t",
+              "value": "={{ $('Prepare Login Auth').item.json.timestamp }}"
+            },
+            {
+              "name": "sign_method",
+              "value": "HMAC-SHA256"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1952,
+        -320
+      ],
+      "id": "7d7ddfb7-472e-4c49-9981-834110a88620",
+      "name": "🔐 Tuya Auth: Get Access Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Grab keys from your login nodes\nconst clientId = $('Hash Login Sign').first().json.clientId;\nconst accessToken = $input.first().json.result.access_token\n\n// Put your Heater Device ID here!\nconst heaterId = 'bfe3aac6772c3b4cbfjopn'; \nconst timestamp = Date.now().toString();\n\n// The exact text we are sending\nconst bodyStr = '{\"commands\":[{\"code\":\"switch_1\",\"value\":true}]}';\nconst urlPath = `/v1.0/devices/${heaterId}/commands`;\n\nreturn [{\n  json: {\n    clientId: clientId,\n    accessToken: accessToken,\n    timestamp: timestamp,\n    urlPath: urlPath,\n    fullUrl: `https://openapi.tuyaeu.com${urlPath}`,\n    bodyStr: bodyStr\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        -320
+      ],
+      "id": "4350c6c7-fb3b-461d-a613-6d42a8628dab",
+      "name": "⚡ Tuya: Prepare Heater ON Command"
+    },
+    {
+      "parameters": {
+        "value": "={{ $json.bodyStr }}",
+        "dataPropertyName": "bodyHash"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -320
+      ],
+      "id": "45268841-1293-48d8-914e-86091c9cc246",
+      "name": "🔐 Tuya: Hash Command Body"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\n// Build the string to sign using the dynamic bodyHash\nconst stringToSign = 'POST\\n' + data.bodyHash + '\\n\\n' + data.urlPath;\nconst signStr = data.clientId + data.accessToken + data.timestamp + stringToSign;\n\n// Pass the new signature string forward\ndata.signStr = signStr;\nreturn [{ json: data }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2624,
+        -320
+      ],
+      "id": "8a34ea52-ebaa-465f-bf26-ca46c20ac1bd",
+      "name": "🔐 Tuya: Prepare ON Auth Signature"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "value": "={{ $json.signStr }}"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        -320
+      ],
+      "id": "daa8c978-522c-48ba-bc26-8670dbb25103",
+      "name": "🔐 Tuya: Hash Final ON Signature",
+      "credentials": {
+        "crypto": {
+          "id": "7jv5LaG4OqgU57Xd",
+          "name": "Crypto account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.fullUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.clientId }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.accessToken }}"
+            },
+            {
+              "name": "sign",
+              "value": "={{ $json.data.toUpperCase() }}"
+            },
+            {
+              "name": "t",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "sign_method",
+              "value": "HMAC-SHA256"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.bodyStr }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3072,
+        -320
+      ],
+      "id": "5e6b7525-551e-4c22-b7e3-fa0f82081ead",
+      "name": "🌡️ Tuya API: Turn Heater ON Remotely"
+    },
+    {
+      "parameters": {
+        "content": "WF2: AI Guest Concierge & Smart Home Monitor\nPurpose: First line of defense for guest communications and emergency triage.\nTriggers: Polls the connected Gmail account every 10 minutes.\nActions:\n\nReads new messages and uses Groq AI to answer standard FAQs automatically.\n\nScans messages for \"heating/cold\" keywords to automatically turn on the Tuya smart heater and alert the owner.\n\nScans for \"consumables\" keywords (e.g., toilet paper) to instantly alert the cleaner.\n\nLogs all interactions into the Google Sheets database.",
+        "height": 240,
+        "width": 672
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        80,
+        -576
+      ],
+      "typeVersion": 1,
+      "id": "d6443f53-f750-46d3-9121-a155c4831695",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        144,
+        176
+      ],
+      "id": "c101b1df-ceab-4e1b-b70a-9f7e474991a0",
+      "name": "🧠 LLM: Groq AI Model (Issue Analyzer)",
+      "credentials": {
+        "groqApi": {
+          "id": "Y0tJAxIUKhiuiuSi",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        -32
+      ],
+      "id": "98fd5961-4428-4e37-96a0-937c251c7f54",
+      "name": "📧 Trigger: Watch Gmail for New Guest Messages (Every 10 min)",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI Concierge for the Bryson Road apartment. \nRead the guest's message and accomplish TWO tasks:\n1. Write a warm, helpful reply answering their question based on the FAQ.\n2. Analyze their intent to see if they are complaining about the apartment being cold, or asking for more consumable supplies (like toilet paper, soap, etc).\n\nYou MUST output your response strictly as a JSON object using this exact format:\n{\n  \"replyToGuest\": \"Your warm response goes here...\",\n  \"heatingIssue\": true/false,\n  \"suppliesIssue\": true/false\n}\n\nGuestMessage: {{ $json.snippet }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        208,
+        -32
+      ],
+      "id": "678e4c1f-06a4-409b-aba3-d5cde284c96c",
+      "name": "🤖 AI: Analyze Guest Message & Detect Issues"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Grab the raw text from the LLM\nlet rawText = $json.text;\n\n// Safety net: LLMs sometimes wrap JSON in markdown tags (```json ... ```). \n// This removes them so the parser doesn't crash.\nlet cleanText = rawText.replace(/```json|```/g, '').trim();\n\n// Parse the clean string into real usable data\nreturn JSON.parse(cleanText);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        -32
+      ],
+      "id": "4d18d8de-c9fc-4635-9640-b01413d60c65",
+      "name": "🔧 Parse AI Response into Usable Data"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.heatingIssue }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "e94d5045-42a4-4cb9-951f-a1ac6cecd487"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4092e3b9-6722-4c7d-b96b-78bea201d667",
+                    "leftValue": "={{ $json.suppliesIssue }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        -48
+      ],
+      "id": "12dda886-4d4a-4b51-af58-020bdfe77b7f",
+      "name": "🔀 Route: Heating Problem? Supplies Low? Or Normal FAQ?"
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "Guest reported heating issue. Heater switch turned ON. Monitoring temperature.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        -320
+      ],
+      "id": "611799cd-7b0e-4031-90e8-b1810d224c34",
+      "name": "🔥 Alert Owner: Guest Reported Heating Problem",
+      "webhookId": "5fb8f0c5-678f-4c74-9082-cdb54224718e",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional Airbnb host assistant. Use the provided FAQ data to answer the guest's inquiry. If the answer is not in the FAQ, politely tell them you will check with the owner and get back to them. Always be welcoming and polite. \nuser query: {{ $json.snippet }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1312,
+        -128
+      ],
+      "id": "5b81727f-77a4-48ec-9cd5-36a7937a9fb2",
+      "name": "🤖 AI Agent: Write Final FAQ Response Using Knowledge Base"
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Poll Guest Emails').item.json.id }}",
+        "message": "={{ $json.output }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        -128
+      ],
+      "id": "60c10dad-34bc-4234-89c2-5da16a65395d",
+      "name": "📧 Send AI Reply Email to Guest",
+      "webhookId": "df11f741-ac14-4a71-9a28-81091361579a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1200800909",
+        "text": "Guest reported low consumables. Please check and replenish.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        400
+      ],
+      "id": "5e83d2dd-d2e2-431d-8864-178646f9331a",
+      "name": "📦 Alert Cleaner: Restock Supplies Needed",
+      "webhookId": "0eb84e91-3514-4e37-9dd9-961761b8b323",
+      "credentials": {
+        "telegramApi": {
+          "id": "hNzEFDPX7OsIEpei",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5874d634-89d8-4533-88cd-7645140f6146",
+              "name": "id",
+              "value": "={{ $('Poll Guest Emails').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f293b2f5-98ff-4763-b2c4-7a50c48175b5",
+              "name": "snippet",
+              "value": "={{ $('Poll Guest Emails').item.json.snippet }}",
+              "type": "string"
+            },
+            {
+              "id": "31d9f2bf-e172-4399-bc53-f59b043344b8",
+              "name": "From",
+              "value": "={{ $('Poll Guest Emails').item.json.From }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1024,
+        -48
+      ],
+      "id": "607d8ae3-ad45-45d0-8ae2-23656e55c7f2",
+      "name": "📝 Prepare Guest Data for AI Agent"
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Poll Guest Emails').item.json.id }}",
+        "message": "Hi there,\n\nThank you for letting us know about the heating. We've already turned on the heating remotely — it should warm up within 20-30 minutes.\n\nIf you still feel cold after 30 minutes, please reply to this email and we'll arrange an immediate visit.\n\nWarm regards,\nBryson Road Host",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3272,
+        -320
+      ],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+      "name": "📧 Email Guest: Heating Has Been Turned On",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Poll Guest Emails').item.json.id }}",
+        "message": "Hi there,\n\nThank you for letting us know! We've alerted our housekeeping team and they will replenish your supplies (toilet paper, hand wash, body wash) as soon as possible — typically within a few hours.\n\nIf you need anything urgently, please reply to this email.\n\nWarm regards,\nBryson Road Host",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1352,
+        400
+      ],
+      "id": "c2d3e4f5-a6b7-8901-cdef-123456789012",
+      "name": "📧 Email Guest: Supplies Are On The Way",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "U58JI2askGY0txc6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lF5g2V4WxT67QVBymfXVzQ0NOg_JbL4AMoUKMc6rakU",
+          "mode": "list",
+          "cachedResultName": "Rental Automation DB"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=1",
+          "mode": "list",
+          "cachedResultName": "Interaction Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "Guest Email": "={{ $('Poll Guest Emails').item.json.From }}",
+            "Message Snippet": "={{ $('Poll Guest Emails').item.json.snippet }}",
+            "Heating Issue": "={{ $('Parse AI JSON').item.json.heatingIssue }}",
+            "Supplies Issue": "={{ $('Parse AI JSON').item.json.suppliesIssue }}",
+            "AI Reply": "={{ $('Finalize Response').item.json.output }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1992,
+        -128
+      ],
+      "id": "d3e4f5a6-b7c8-9012-defa-234567890123",
+      "name": "💾 Log This Interaction to Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WMA0rkkB1Gmkeeyx",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📌 **Email Watcher**\nChecks Gmail every 10 minutes for new messages from Airbnb guests.",
+        "height": 110,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -162
+      ],
+      "id": "note-dx8fp8ga",
+      "name": "Note: 📧 Trigger: Watch Gmail for New Guest Messages (Every 10 min)"
+    },
+    {
+      "parameters": {
+        "content": "📌 **AI Brain**\nSends the guest's message to Groq AI to detect issues (heating/supplies) or FAQ.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -162
+      ],
+      "id": "note-3u4d646n",
+      "name": "Note: 🤖 AI: Analyze Guest Message & Detect Issues"
+    },
+    {
+      "parameters": {
+        "content": "📌 **JSON Parser**\nConverts the AI response into variables.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -162
+      ],
+      "id": "note-oilhvueh",
+      "name": "Note: 🔧 Parse AI Response into Usable Data"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Message Router**\nRoutes to Heating fix, Supplies alert, or standard AI FAQ reply.",
+        "height": 110,
+        "width": 320,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        816,
+        -178
+      ],
+      "id": "note-epl5aaod",
+      "name": "Note: 🔀 Route: Heating Problem? Supplies Low? Or Normal FAQ?"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Urgent Alert**\nPings the owner on Telegram that heating needs fixing.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        -450
+      ],
+      "id": "note-62ddl38h",
+      "name": "Note: 🔥 Alert Owner: Guest Reported Heating Problem"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Smart Home Control**\nSends a command to the Tuya API to physically turn the heater ON.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3072,
+        -450
+      ],
+      "id": "note-2q3yo8u1",
+      "name": "Note: 🌡️ Tuya API: Turn Heater ON Remotely"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Restock Alert**\nPings the cleaner to go drop off supplies.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        270
+      ],
+      "id": "note-4zywadb3",
+      "name": "Note: 📦 Alert Cleaner: Restock Supplies Needed"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Guest Update**\nTells the guest we remotely turned the heating on.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3272,
+        -450
+      ],
+      "id": "note-q14b4eex",
+      "name": "Note: 📧 Email Guest: Heating Has Been Turned On"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Guest Update**\nTells the guest supplies are coming.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1352,
+        270
+      ],
+      "id": "note-ep18hrq9",
+      "name": "Note: 📧 Email Guest: Supplies Are On The Way"
+    },
+    {
+      "parameters": {
+        "content": "📌 **AI Agent**\nUses House Rules to generate a polite, helpful reply to guest.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        -258
+      ],
+      "id": "note-wzdqh47t",
+      "name": "Note: 🤖 AI Agent: Write Final FAQ Response Using Knowledge Base"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Send Reply**\nSends the generated AI response to the guest.",
+        "height": 110,
+        "width": 320,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        -258
+      ],
+      "id": "note-t7iwayqi",
+      "name": "Note: 📧 Send AI Reply Email to Guest"
+    },
+    {
+      "parameters": {
+        "content": "📌 **Database Log**\nSaves this conversation to the DB.",
+        "height": 110,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1992,
+        -258
+      ],
+      "id": "note-jmlme7gm",
+      "name": "Note: 💾 Log This Interaction to Google Sheets"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "🤖 AI Agent: Write Final FAQ Response Using Knowledge Base",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Trigger: Watch Gmail for New Guest Messages (Every 10 min)": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI: Analyze Guest Message & Detect Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI: Analyze Guest Message & Detect Issues": {
+      "main": [
+        [
+          {
+            "node": "🔧 Parse AI Response into Usable Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Parse AI Response into Usable Data": {
+      "main": [
+        [
+          {
+            "node": "🔀 Route: Heating Problem? Supplies Low? Or Normal FAQ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Route: Heating Problem? Supplies Low? Or Normal FAQ?": {
+      "main": [
+        [
+          {
+            "node": "🔥 Alert Owner: Guest Reported Heating Problem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📦 Alert Cleaner: Restock Supplies Needed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📝 Prepare Guest Data for AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔥 Alert Owner: Guest Reported Heating Problem": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya Auth: Prepare Login Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya Auth: Prepare Login Signature": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya Auth: Hash the Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya Auth: Hash the Signature": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya Auth: Get Access Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya Auth: Get Access Token": {
+      "main": [
+        [
+          {
+            "node": "⚡ Tuya: Prepare Heater ON Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚡ Tuya: Prepare Heater ON Command": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya: Hash Command Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya: Hash Command Body": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya: Prepare ON Auth Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya: Prepare ON Auth Signature": {
+      "main": [
+        [
+          {
+            "node": "🔐 Tuya: Hash Final ON Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔐 Tuya: Hash Final ON Signature": {
+      "main": [
+        [
+          {
+            "node": "🌡️ Tuya API: Turn Heater ON Remotely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🌡️ Tuya API: Turn Heater ON Remotely": {
+      "main": [
+        [
+          {
+            "node": "📧 Email Guest: Heating Has Been Turned On",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Alert Cleaner: Restock Supplies Needed": {
+      "main": [
+        [
+          {
+            "node": "📧 Email Guest: Supplies Are On The Way",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Prepare Guest Data for AI Agent": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI Agent: Write Final FAQ Response Using Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI Agent: Write Final FAQ Response Using Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "📧 Send AI Reply Email to Guest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 LLM: Groq AI Model (FAQ Agent)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 AI Agent: Write Final FAQ Response Using Knowledge Base",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 LLM: Groq AI Model (Issue Analyzer)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 AI: Analyze Guest Message & Detect Issues",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Send AI Reply Email to Guest": {
+      "main": [
+        [
+          {
+            "node": "💾 Log This Interaction to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c35b3015-5196-4536-af9c-30f0b4367485",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd17a9aef4af9032ead3641dd327b5a1ac976a4cd5a2ff7fa7f6952794d03aa4"
+  },
+  "nodeGroups": [],
+  "id": "jvHuJytNNTc8RVq3",
+  "tags": []
+}
